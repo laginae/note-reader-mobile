@@ -1,0 +1,10 @@
+{
+  "id": "note-reader-mobile",
+  "name": "Note and PDF Voice Reader Mobile",
+  "version": "0.1.0",
+  "minAppVersion": "1.11.4",
+  "description": "Privacy-first read aloud for notes and text PDFs using system speech or optional online TTS.",
+  "author": "Note and PDF Voice Reader Contributors",
+  "authorUrl": "https://github.com/laginae/note-reader-mobile",
+  "isDesktopOnly": false
+}

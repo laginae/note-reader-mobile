@@ -1,0 +1,145 @@
+.note-reader-mobile-root {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.note-reader-mobile-root h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.note-reader-mobile-status {
+  border-block: 1px solid var(--background-modifier-border);
+  padding-block: 10px;
+}
+
+.note-reader-mobile-phase {
+  color: var(--text-normal);
+  font-weight: var(--font-semibold);
+}
+
+.note-reader-mobile-phase.is-error {
+  color: var(--text-error);
+}
+
+.note-reader-mobile-phase.is-complete {
+  color: var(--text-success);
+}
+
+.note-reader-mobile-source,
+.note-reader-mobile-section-label {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  margin-top: 4px;
+}
+
+.note-reader-mobile-navigation {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+}
+
+.note-reader-mobile-progress {
+  min-width: 0;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.note-reader-mobile-icon-button,
+.note-reader-mobile-command-button,
+.note-reader-mobile-segmented button {
+  border-radius: 6px;
+  min-height: 44px;
+  touch-action: manipulation;
+}
+
+.note-reader-mobile-icon-button {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  min-width: 44px;
+  padding: 8px;
+}
+
+.note-reader-mobile-button-icon {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+}
+
+.note-reader-mobile-button-icon svg {
+  height: 18px;
+  width: 18px;
+}
+
+.note-reader-mobile-command-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.note-reader-mobile-command-button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+  min-width: 0;
+  padding: 9px 10px;
+  white-space: normal;
+}
+
+.note-reader-mobile-command-button span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.note-reader-mobile-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.note-reader-mobile-segmented {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.note-reader-mobile-segmented button {
+  min-width: 0;
+  padding-inline: 4px;
+}
+
+.note-reader-mobile-segmented button.is-active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.note-reader-mobile-current-text {
+  border-top: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0;
+  max-height: 10em;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding-top: 12px;
+}
+
+@media (max-width: 360px) {
+  .note-reader-mobile-root {
+    padding-inline: 10px;
+  }
+
+  .note-reader-mobile-command-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
