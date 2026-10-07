@@ -19,11 +19,12 @@
 ## 安装与开始
 
 1. 使用 Obsidian 1.11.4 或更高版本，并先备份仓库。
-2. 从 [GitHub Releases](https://github.com/laginae/note-reader-mobile/releases) 下载 `main.js`、`manifest.json` 和 `styles.css`。
-3. 使用设备文件管理器或仓库同步，将三个文件放入 `<仓库>/.obsidian/plugins/note-reader-mobile/`，然后开启插件。不要复制其他仓库的 `data.json` 或密钥。
-4. 先尝试系统语音；也可以配置在线服务的秘密，并明确允许在线处理。
+2. 打开 **设置 → 第三方插件 → 浏览**，搜索 **Note and PDF Voice Reader for Mobile**。
+3. 点击 **安装**，然后 **启用**。也可以打开[社区介绍页面](https://community.obsidian.md/plugins/note-reader-mobile)。
+4. 打开笔记或 PDF，点击朗读图标显示播放工具栏。
+5. 先尝试系统语音；也可以在插件设置中配置在线服务的秘密，并明确允许在线处理。
 
-社区安装入口以 Obsidian 审核结果为准，GitHub 已发布不代表已经上架。请避免在同一仓库同时启动桌面版和移动版朗读。
+如需浏览和朗读本地 HTML 文件，请另外安装并启用 **HTML Reader**。请避免在同一仓库同时启动桌面版和移动版朗读。
 
 ## 当前功能
 
@@ -117,6 +118,16 @@ OpenRouter 默认使用 Kokoro 英式男声 `bm_george`，也包含美式英语�
 - 若设备阻止自动播放，可以点“继续”播放保留的音频，不会重新请求合成。
 
 远程 CosyVoice 接口需接收 `input`、`voice`、`speed: 1`、`response_format: "mp3"` JSON 字段，返回 MP3 或 PCM WAV。可选秘密作为 Bearer 令牌发送。手机不运行本地 Python、CosyVoice 程序或桌面辅助程序。
+
+## 手动安装
+
+社区目录无法访问，或需要安装特定版本时，可使用此备用方式。
+
+1. 从 [GitHub Releases](https://github.com/laginae/note-reader-mobile/releases) 的同一版本下载 `main.js`、`manifest.json` 和 `styles.css`。
+2. 使用设备文件管理器或仓库同步，将三个文件放入 `<仓库>/.obsidian/plugins/note-reader-mobile/`。
+3. 在第三方插件设置中启用插件。手动更新已启用的插件后，请关闭再开启，让新文件生效。
+
+不要复制其他仓库的 `data.json` 或密钥。社区审核通过不代表所有设备和文档场景均已测试通过。
 
 ## 开发与测试
 

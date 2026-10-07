@@ -19,11 +19,12 @@ A mobile-first read-aloud companion for Markdown notes, text-based PDFs and loca
 ## Install and Start
 
 1. Use Obsidian 1.11.4 or later and back up your vault.
-2. Download `main.js`, `manifest.json` and `styles.css` from [GitHub Releases](https://github.com/laginae/note-reader-mobile/releases).
-3. Put the three files in `<vault>/.obsidian/plugins/note-reader-mobile/` using your device file manager or vault sync, then enable the plugin. Do not copy another vault's `data.json` or credentials.
-4. Start with device system speech, or choose an online engine and explicitly enable processing after configuring its secret.
+2. Open **Settings → Community plugins → Browse** and search for **Note and PDF Voice Reader for Mobile**.
+3. Select **Install**, then **Enable**. You can also open the [community listing](https://community.obsidian.md/plugins/note-reader-mobile).
+4. Open a note or PDF and tap the reader icon to show the playback toolbar.
+5. Start with device system speech, or choose an online engine in the plugin settings and explicitly enable processing after configuring its secret.
 
-Community availability depends on Obsidian review; a GitHub release alone does not mean the plugin is listed. Avoid starting the desktop and mobile plugins at the same time in one vault.
+To browse and read local HTML files, install and enable **HTML Reader** as well. Avoid starting the desktop and mobile reader plugins at the same time in one vault.
 
 ## Current capabilities
 
@@ -132,6 +133,16 @@ Filtering is conservative: uncertain edge text, larger titles and numbered headi
 - Reading-order and resume anchors are heuristic. Complex PDFs and changed files may need a new selected starting point.
 - Background/lock-screen playback is not guaranteed. The plugin pauses when the app is hidden.
 - If the device blocks autoplay, tap Resume to play the retained audio; this does not request another synthesis.
+
+## Manual Installation
+
+Use this alternative when the community directory is unavailable or you need a specific version.
+
+1. Download `main.js`, `manifest.json` and `styles.css` from the same version in [GitHub Releases](https://github.com/laginae/note-reader-mobile/releases).
+2. Put the three files in `<vault>/.obsidian/plugins/note-reader-mobile/` using your device file manager or vault sync.
+3. Enable the plugin in Community plugins. If updating an enabled plugin manually, disable and re-enable it to load the new files.
+
+Do not copy another vault's `data.json` or credentials. Community approval does not replace testing on your device or with your documents.
 
 ## Development
 
