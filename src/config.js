@@ -1,11 +1,21 @@
 'use strict';
 
+const { normalizeByokProfile } = require('./byok');
+const MIMO_ENDPOINT = 'https://api.xiaomimimo.com/v1/chat/completions';
+const MIMO_VOICES = ['白桦', '苏打', '冰糖', '茉莉', 'Dean', 'Milo', 'Mia', 'Chloe'];
+
 const DEFAULT_AZURE_VOICE = 'en-GB-RyanNeural';
 const DEFAULT_OPENROUTER_MODEL = 'hexgrad/kokoro-82m';
 const DEFAULT_OPENROUTER_VOICE = 'bm_george';
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/audio/speech';
 const ONLINE_CHUNK_LIMITS = [200, 400, 800];
-const SPEECH_ENGINES = ['system', 'azure', 'openrouter', 'remote-cosyvoice'];
+const SPEECH_ENGINES = ['system', 'azure', 'openrouter', 'mimo', 'remote-cosyvoice', 'byok'];
+const OPENROUTER_DEFAULT_VOICES = Object.freeze({
+  'hexgrad/kokoro-82m': 'bm_george',
+  'microsoft/mai-voice-2': 'en-US-Ethan:MAI-Voice-2',
+  'microsoft/mai-voice-2-flash': 'en-US-Ethan:MAI-Voice-2-Flash',
+  'google/gemini-3.1-flash-tts-preview': 'Charon',
+});
 
 const MICROSOFT_VOICES = [
   ['zh-CN-XiaoxiaoNeural', 'Mandarin - Xiaoxiao (female)', '普通话 - 小晓（女声）'],
@@ -35,6 +45,9 @@ const OPENROUTER_VOICES = {
     ['bm_george', 'George (UK English male)', 'George（英式英语男声）'],
   ],
   'microsoft/mai-voice-2': [
+    ['en-US-Ethan:MAI-Voice-2', 'Ethan (US English male, compatibility preset)', 'Ethan（美式英语男声，兼容预设）'],
+    ['en-US-Grant:MAI-Voice-2', 'Grant (US English male, compatibility preset)', 'Grant（美式英语男声，兼容预设）'],
+    ['en-US-Jasper:MAI-Voice-2', 'Jasper (US English male, compatibility preset)', 'Jasper（美式英语男声，兼容预设）'],
     ['zh-CN-Bo:MAI-Voice-2', 'Bo (Mandarin male, compatibility preset)', 'Bo（普通话男声，兼容预设）'],
     ['zh-CN-Lan:MAI-Voice-2', 'Lan (Mandarin female, compatibility preset)', 'Lan（普通话女声，兼容预设）'],
     ['zh-CN-Mei:MAI-Voice-2', 'Mei (Mandarin female, compatibility preset)', 'Mei（普通话女声，兼容预设）'],
@@ -43,7 +56,13 @@ const OPENROUTER_VOICES = {
     ['de-DE-Klaus:MAI-Voice-2', 'Klaus (German)', 'Klaus（德语）'],
   ],
   'microsoft/mai-voice-2-flash': [
-    ['en-US-Harper:MAI-Voice-2', 'Harper (US English)', 'Harper（美式英语）'],
+    ['en-US-Ethan:MAI-Voice-2-Flash', 'Ethan (US English male, compatibility preset)', 'Ethan（美式英语男声，兼容预设）'],
+    ['en-US-Olivia:MAI-Voice-2-Flash', 'Olivia (US English female, compatibility preset)', 'Olivia（美式英语女声，兼容预设）'],
+    ['zh-CN-Bo:MAI-Voice-2-Flash', 'Bo (Mandarin male, compatibility preset)', 'Bo（普通话男声，兼容预设）'],
+    ['zh-CN-Wei:MAI-Voice-2-Flash', 'Wei (Mandarin male, compatibility preset)', 'Wei（普通话男声，兼容预设）'],
+    ['zh-CN-Lan:MAI-Voice-2-Flash', 'Lan (Mandarin female, compatibility preset)', 'Lan（普通话女声，兼容预设）'],
+    ['zh-CN-Mei:MAI-Voice-2-Flash', 'Mei (Mandarin female, compatibility preset)', 'Mei（普通话女声，兼容预设）'],
+    ['en-US-Harper:MAI-Voice-2', 'Harper (US English female, OpenRouter-listed ID)', 'Harper（美式英语女声，OpenRouter 已列出）'],
     ['es-MX-Valeria:MAI-Voice-2', 'Valeria (Mexican Spanish)', 'Valeria（墨西哥西班牙语）'],
     ['fr-FR-Soleil:MAI-Voice-2', 'Soleil (French)', 'Soleil（法语）'],
     ['de-DE-Klaus:MAI-Voice-2', 'Klaus (German)', 'Klaus（德语）'],
@@ -75,6 +94,16 @@ const DEFAULT_SETTINGS = Object.freeze({
   remoteEndpoint: '',
   remoteVoice: '',
   remoteSecretName: '',
+  mimoConsent: false,
+  mimoSecretName: '',
+  mimoVoice: '白桦',
+  byokProfile: Object.freeze(normalizeByokProfile()),
+  volume: 1,
+  rapidStart: false,
+  academicMathMode: 'smart',
+  academicMathStyle: 'concise',
+  academicTableMode: 'smart',
+  academicSkipNotice: true,
   speed: 1,
   chunkLimits: ONLINE_CHUNK_LIMITS.join(','),
   stripMarkdown: true,
@@ -149,6 +178,16 @@ function normalizeSettings(value) {
     remoteEndpoint: String(source.remoteEndpoint || '').trim().slice(0, 2048),
     remoteVoice: String(source.remoteVoice || '').trim().slice(0, 200),
     remoteSecretName: normalizeSecretName(source.remoteSecretName),
+    mimoConsent: source.mimoConsent === true,
+    mimoSecretName: normalizeSecretName(source.mimoSecretName),
+    mimoVoice: MIMO_VOICES.includes(source.mimoVoice) ? source.mimoVoice : '白桦',
+    byokProfile: normalizeByokProfile(source.byokProfile),
+    volume: Number.isFinite(Number(source.volume)) && source.volume != null ? Math.max(0, Math.min(1, Number(source.volume))) : 1,
+    rapidStart: source.rapidStart === true,
+    academicMathMode: ['smart', 'all', 'skip'].includes(source.academicMathMode) ? source.academicMathMode : 'smart',
+    academicMathStyle: source.academicMathStyle === 'verbose' ? 'verbose' : 'concise',
+    academicTableMode: ['smart', 'all', 'skip'].includes(source.academicTableMode) ? source.academicTableMode : 'smart',
+    academicSkipNotice: source.academicSkipNotice !== false,
     speed: normalizeSpeed(source.speed),
     chunkLimits: normalizeChunkLimits(source.chunkLimits),
     stripMarkdown: source.stripMarkdown !== false,
@@ -185,7 +224,7 @@ function escapeXml(value) {
 function buildAzureSsml(text, settings = {}) {
   const voice = normalizeAzureVoice(settings.azureVoice);
   const locale = voice.split('-').slice(0, 2).join('-');
-  const speed = normalizeSpeed(settings.speed);
+  const speed = 1;
   const rate = `${Math.round((speed - 1) * 100)}%`;
   return `<speak version="1.0" xml:lang="${locale}"><voice name="${escapeXml(voice)}"><prosody rate="${rate}">${escapeXml(text)}</prosody></voice></speak>`;
 }
@@ -196,7 +235,7 @@ function buildOpenRouterRequestBody(text, settings = {}) {
     input: String(text || ''),
     voice: normalizeOpenRouterVoice(settings.openRouterVoice),
     response_format: 'mp3',
-    speed: normalizeSpeed(settings.speed),
+    speed: 1,
     provider: {
       data_collection: 'deny',
       zdr: true,
@@ -215,6 +254,9 @@ function requireHttpsEndpoint(value) {
   if (parsed.protocol !== 'https:') {
     throw new Error('Remote CosyVoice must use HTTPS.');
   }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash || /[\s\\]/.test(endpoint)) {
+    throw new Error('Remote CosyVoice endpoint must not contain credentials, query parameters or fragments.');
+  }
   return parsed.toString();
 }
 
@@ -223,11 +265,13 @@ function getOpenRouterVoices(model) {
 }
 
 function getDefaultOpenRouterVoice(model) {
-  const voices = getOpenRouterVoices(model);
-  return voices.length ? voices[0][0] : DEFAULT_OPENROUTER_VOICE;
+  const normalizedModel = normalizeOpenRouterModel(model);
+  return OPENROUTER_DEFAULT_VOICES[normalizedModel] || DEFAULT_OPENROUTER_VOICE;
 }
 
 module.exports = {
+  MIMO_ENDPOINT,
+  MIMO_VOICES,
   DEFAULT_AZURE_VOICE,
   DEFAULT_OPENROUTER_MODEL,
   DEFAULT_OPENROUTER_VOICE,
@@ -235,6 +279,7 @@ module.exports = {
   MICROSOFT_VOICES,
   ONLINE_CHUNK_LIMITS,
   OPENROUTER_ENDPOINT,
+  OPENROUTER_DEFAULT_VOICES,
   OPENROUTER_MODELS,
   OPENROUTER_VOICES,
   buildAzureEndpoint,

@@ -107,6 +107,78 @@
   gap: 7px;
 }
 
+.note-reader-mobile-transport {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.note-reader-mobile-range {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  min-height: 32px;
+  accent-color: var(--text-muted);
+}
+
+.note-reader-mobile-range:disabled {
+  opacity: 0.4;
+}
+
+.note-reader-mobile-settings h2 {
+  font-size: 1.2rem;
+  margin: 0 0 8px;
+}
+
+.note-reader-mobile-settings-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.note-reader-mobile-settings-tabs button {
+  min-height: 44px;
+  flex: 1 1 auto;
+  border-radius: 4px;
+  box-shadow: none;
+  background: transparent;
+  white-space: normal;
+}
+
+.note-reader-mobile-settings-tabs button.is-active {
+  background: var(--background-modifier-hover);
+  color: var(--text-accent);
+}
+
+.note-reader-mobile-settings .setting-item {
+  min-width: 0;
+  gap: 10px;
+}
+
+.note-reader-mobile-settings .setting-item-info,
+.note-reader-mobile-settings .setting-item-control {
+  min-width: 0;
+}
+
+.note-reader-mobile-settings input,
+.note-reader-mobile-settings select {
+  max-width: 100%;
+}
+
+@media (max-width: 480px) {
+  .note-reader-mobile-settings .setting-item {
+    flex-wrap: wrap;
+  }
+  .note-reader-mobile-settings .setting-item-control {
+    flex-wrap: wrap;
+    margin-left: auto;
+    max-width: 100%;
+  }
+}
+
 .note-reader-mobile-segmented {
   display: grid;
   gap: 4px;

@@ -1,6 +1,19 @@
 # Note and PDF Voice Reader Mobile
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 这是面向 Obsidian 手机和平板端的笔记与 PDF 朗读插件。
+
+**0.2.0 为移动端测试版。** 已提供自动化检查，Android 和 iOS 真机验证尚未完成。这是独立插件，不修改或替换桌面版。
+
+## 安装与开始
+
+1. 使用 Obsidian 1.11.4 或更高版本，并先备份仓库。
+2. 从 [GitHub Releases](https://github.com/laginae/note-reader-mobile/releases) 下载 `main.js`、`manifest.json` 和 `styles.css`。
+3. 使用设备文件管理器或仓库同步，将三个文件放入 `<仓库>/.obsidian/plugins/note-reader-mobile/`，然后开启插件。不要复制其他仓库的 `data.json` 或密钥。
+4. 先尝试系统语音；也可以配置在线服务的秘密，并明确允许在线处理。
+
+本次不是 Obsidian 社区目录提交。请避免在同一仓库同时启动桌面版和移动版朗读。
 
 ## 当前功能
 
@@ -10,24 +23,63 @@
 - 从仅包含短文本锚点的保存位置继续朗读
 - 按坐标识别 PDF 单栏、双栏和单双栏混合排版
 - 默认使用设备系统语音，插件不会向在线 TTS 服务发送文本
-- 可选 Azure Speech、OpenRouter TTS 和 HTTPS 远程 CosyVoice
+- 可选小米 MiMo、Azure Speech、OpenRouter TTS、HTTPS 远程 CosyVoice 和自定义语音 API（BYOK）
 - 适合触控和竖屏的控制界面，可暂停、继续和跳转分段
 - 在线语音严格按需合成当前分段，不提前合成后续段落
+- 在线音频本地倍速、音量与当前已加载音频内定位
+- 分类设置、学术文本处理，以及不改变逻辑段编号的渐进式起读音频
+
+## 在线服务配置
+
+**小米 MiMo：** 在 [MiMo 控制台](https://platform.xiaomimimo.com/) 获取 API 密钥，通过 Obsidian 秘密选择器保存和关联，然后允许在线处理。默认使用**白桦**，可尝试中英文朗读。采用保守的 200 字符分段，未确认完整生成时停止而不跳段。这是插件限制，不是官方公布的接口上限。价格和优惠可能变化，不承诺永久免费。详见 [官方语音合成指南](https://mimo.mi.com/docs/zh-CN/quick-start/usage-guide/audio/speech-synthesis-v2.5)。
+
+**OpenRouter：** 选择秘密、模型、音色，再允许处理。**Azure：** 还需填写 Speech 资源区域和云环境。请核对资源或服务商适用的隐私与保留政策；填写密钥不代表插件认证了“不训练”或“ZDR”。
+
+**BYOK：** 支持一个当前配置，类型包括 OpenAI 兼容语音接口、ElevenLabs、MiniMax。填写地址、模型、音色 ID 和秘密引用后，需要明确确认传输、计费、训练及保留风险。修改地址或服务商会清除秘密引用和授权，但不会删除已保存的秘密；修改模型、音色和秘密引用也需重新授权。仅支持聊天的接口不能当作语音接口使用。
+
+BYOK 和远程 CosyVoice 使用 HTTPS、拒绝重定向、不携带 Cookie，不会退回绕过这些限制的方式。接口必须允许移动 WebView 的跨域请求（CORS），部分服务可能不可用，需以实际手机和接口验证为准。用户授权不是服务商隐私保证，撤销也不能收回已发送的文本。
+
+音色与接口参考：[OpenAI](https://developers.openai.com/api/docs/guides/text-to-speech)、[ElevenLabs](https://elevenlabs.io/docs/api-reference/text-to-speech/convert)、[MiniMax](https://platform.minimax.io/docs/api-reference/speech-t2a-http)。
 
 ## 隐私边界
 
-默认的设备系统语音模式不会由本插件发起 TTS 网络请求。Azure、OpenRouter 和远程 CosyVoice 都必须由用户主动开启；开启后也只发送当前分段。
+默认的系统语音模式不会由本插件发起 TTS 网络请求，但操作系统及音色实现决定其自身是否联网。重视隐私时优先选择标记为本地的音色。安装的音色不一定会向移动 WebView 开放。所有在线模式都必须主动允许，且仅发送当前需要播放的文本。
 
-API 密钥保存在 Obsidian SecretStorage 中，`data.json` 只记录秘密名称。OpenRouter 请求固定要求 ZDR，并拒绝供应商收集数据。PDF 文本提取和阅读顺序计算均在本地完成；纯扫描 PDF 需要先进行 OCR。
+API 密钥保存在 Obsidian SecretStorage 中，`data.json` 只记录秘密名称。OpenRouter 请求固定要求 ZDR 并拒绝供应商收集数据，无合适路由时会失败而不会静默降低要求。PDF 文本提取和阅读顺序计算在本地完成。
+
+插件没有开发者中转服务器，也没有内置遥测。音频保留在内存中播放；设置及可选续读记录保存在仓库，可能被用户选择的同步服务同步。操作系统、Obsidian 和服务商另有各自政策。停止或超时不能撤销已开始的服务端处理或计费。插件不自动重试失败请求，也不在提示中展示可能包含正文的原始服务响应。
+
+OpenRouter 默认使用 Kokoro 英式男声 `bm_george`，也包含美式英语预设。微软兼容音色即使在某一路由可用，也可能被另一路由拒绝。模型、音色、账户权限及价格以服务商实际情况为准。
+
+## 播放与适用边界
+
+| 功能 | 移动版 0.2.0 测试版 | 桌面版 0.9.4 |
+| --- | --- | --- |
+| Markdown 与文本 PDF | 已支持，待真机验证 | 已支持 |
+| MiMo 与自定义语音 API | 已加入，待手机/实际接口验证 | 已支持 |
+| 本地可执行程序 / Python 引擎 | 不包含 | 已支持 |
+| 学术文本清理 | 使用新版共享算法 | 已支持 |
+| 高亮及 PDF 大纲/书签工具 | 不包含 | 已支持 |
+| HTML、网页、Copilot、音频导出 | 不包含 | 已支持 |
+
+- 在线音频按正常语速合成，在本机调节倍速，避免重复加速或仅因改倍速再次合成计费。系统语音的语速、音量修改可能从下一条语音生效。
+- 前后 5 秒与当前音频滑块仅定位已加载的在线音频，不跨到尚未合成的段落，也不用于系统语音。
+- 当前先完成 PDF 提取再播放，尚非桌面版渐进式 PDF 解析。扫描 PDF 需要先做 OCR。
+- 不含正文高亮、PDF 大纲/书签编辑、HTML/网页/Copilot 集成及音频导出。
+- PDF 排序和续读锚点是启发式识别；复杂排版或修改后的文件可能需要重选起点。
+- 后台、锁屏持续播放不作保证，应用隐藏时主动暂停。
+- 若设备阻止自动播放，可以点“继续”播放保留的音频，不会重新请求合成。
+
+远程 CosyVoice 接口需接收 `input`、`voice`、`speed: 1`、`response_format: "mp3"` JSON 字段，返回 MP3 或 PCM WAV。可选秘密作为 Bearer 令牌发送。手机不运行本地 Python、CosyVoice 程序或桌面辅助程序。
 
 ## 开发与测试
 
 ```bash
-npm install
+npm ci
 npm test
 ```
 
-正式提交社区目录前，还必须完成 Obsidian 移动模拟、Android 真机和 iOS 真机测试。系统可能在 Obsidian 进入后台后限制音频，本插件会在页面隐藏时主动暂停。
+正式提交社区目录前，还必须在 Android 和 iOS 完成 [真机检查清单](docs/mobile-validation.md)。模拟测试不上传笔记，也不消耗语音额度。仓库包含构建入口源码，可据此重建发布文件。
 
 ## 相关仓库
 

@@ -1,6 +1,6 @@
 {
   "name": "note-reader-mobile",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Mobile-first Obsidian note and PDF voice reader.",
   "license": "MIT",
@@ -10,7 +10,7 @@
     "check:mobile": "node scripts/check-mobile-boundary.cjs"
   },
   "dependencies": {
-    "@laginae/note-reader-core": "git+https://github.com/laginae/note-reader-core.git#v0.1.0"
+    "@laginae/note-reader-core": "git+https://github.com/laginae/note-reader-core.git#v0.2.0"
   },
   "devDependencies": {
     "esbuild": "0.25.10"
