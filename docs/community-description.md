@@ -30,6 +30,8 @@ Online engines can export a confirmed reading range as normal-speed mono WAV int
 
 ## Privacy
 
+Playback audio is held in memory and released after a part finishes or playback is stopped/cancelled; pausing retains the current audio. Privacy settings offer separate outline-cache and saved-position clearing controls. Clearing saved positions requires confirmation and never deletes documents, keys or exported audio. Exported WAV files remain in the vault until you choose to remove them.
+
 No developer relay server or built-in telemetry. Online speech is opt-in and sent directly to the chosen service. Keys use Obsidian SecretStorage. Device speech may depend on the OS voice's own online/offline behavior. Provider retention/training rules remain separate; OpenRouter requests require ZDR and deny data collection. Parsing PDF/HTML and identifying outlines/footnotes happen locally.
 
 ## Testing and feedback

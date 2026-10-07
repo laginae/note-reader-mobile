@@ -11,6 +11,13 @@ function rule(selector) {
 }
 
 // These guard the layout rules; they do not replace an iOS WebView/device test.
+test('expanded player bounds its height and can scroll final controls above phone navigation', () => {
+  const root = rule('.note-reader-mobile-root');
+  assert.match(root, /height: 100%/); assert.match(root, /min-height: 0/);
+  assert.match(root, /overflow-y: auto/); assert.match(root, /box-sizing: border-box/);
+  assert.match(rule('.is-mobile.is-phone .note-reader-mobile-root'), /104px/);
+  assert.match(rule('.note-reader-mobile-root > *'), /flex-shrink: 0/);
+});
 test('phone status clearance uses app and browser safe areas only on the active reader pane', () => {
   const text = rule('.is-mobile.is-phone .workspace-leaf-content.note-reader-mobile-docked-view');
   assert.match(text, /padding-top: max\(8px, var\(--safe-area-inset-top, 0px\), env\(safe-area-inset-top, 0px\)\)/);

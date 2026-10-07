@@ -96,6 +96,19 @@ function sourceFixture(plugin, extension = 'md') {
   return leaf;
 }
 
+test('cache and position clearing are separate and preserve playback and credentials', async () => {
+  const plugin = fixture(); const queue = plugin.queue;
+  plugin.settings.readingPositions = { example: { anchor: 'test' } };
+  let closed = false; plugin.outlineModal = { close: () => { closed = true; } };
+  plugin.pdfOutlineCache = { text: 'cached text' };
+  plugin.clearOutlineCache();
+  assert.equal(closed, true); assert.equal(plugin.pdfOutlineCache, null);
+  assert.ok(plugin.settings.readingPositions.example); assert.equal(plugin.queue, queue);
+  await plugin.clearSavedReadingPositions();
+  assert.deepEqual(plugin.settings.readingPositions, {}); assert.equal(plugin.queue, queue);
+  assert.equal(plugin.saved.length, 1);
+});
+
 test('Markdown outline loads, locates without starting playback, and reads only the selected section', async () => {
   const plugin = fixture(); const leaf = sourceFixture(plugin);
   plugin.app.vault.cachedRead = async () => '# One\nfirst\n# Two\nsecond';

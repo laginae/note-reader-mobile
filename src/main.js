@@ -3,6 +3,7 @@
 const {
   ItemView,
   MarkdownView,
+  Modal,
   Notice,
   Plugin,
   PluginSettingTab,
@@ -937,6 +938,26 @@ class NoteReaderMobilePlugin extends Plugin {
     this.exportModal = new AudioExportModal(this); this.exportModal.open();
   }
 
+  clearOutlineCache() {
+    this.outlineModal?.close();
+    this.pdfOutlineCache = null;
+  }
+
+  async clearSavedReadingPositions() {
+    this.settings.readingPositions = {};
+    await this.saveSettings();
+  }
+
+  confirmClearReadingPositions() {
+    const zh = this.settings.settingsLanguage === 'chinese';
+    const modal = new Modal(this.app);
+    modal.contentEl.createEl('h2', { text: zh ? '清除续读记录？' : 'Clear saved reading positions?' });
+    modal.contentEl.createEl('p', { text: zh ? '移除已保存的文件位置和文本锚点，不删除文件、导出音频或密钥。继续朗读可能产生新的记录。' : 'Remove saved file positions and text anchors. Files, exported audio and keys are kept. Continued playback may create new positions.' });
+    createButton(modal.contentEl, { icon: 'x', label: zh ? '取消' : 'Cancel', onClick: () => modal.close() });
+    createButton(modal.contentEl, { icon: 'trash-2', label: zh ? '清除记录' : 'Clear positions', onClick: () => this.runSafely(async () => { await this.clearSavedReadingPositions(); modal.close(); }) });
+    modal.open();
+  }
+
   clearHtmlSelectionListener() {
     if (this.htmlSelectionBinding) {
       const { doc, listener, pointer } = this.htmlSelectionBinding;
@@ -1823,7 +1844,16 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
       }));
     }
     if (this.activeTab === 'privacy') {
+    const label = (en, zh) => this.plugin.settings.settingsLanguage === 'chinese' ? zh : en;
     new Setting(containerEl).setName(ui.privacy).setDesc(ui.privacyDesc);
+    new Setting(containerEl).setName(label('Clear outline cache', '清除大纲缓存'))
+      .setDesc(label('Release the in-memory outline and close its panel. Playback, saved positions and exported files are kept.', '释放内存中的大纲并关闭大纲面板；不影响播放、续读记录或导出文件。'))
+      .addButton((button) => button.setButtonText(label('Clear cache', '清除缓存')).onClick(() => {
+        this.plugin.clearOutlineCache(); new Notice(label('Outline cache cleared.', '已清除大纲缓存。'));
+      }));
+    new Setting(containerEl).setName(label('Clear saved reading positions', '清除续读记录'))
+      .setDesc(label('Remove saved positions after confirmation; do not delete audio exports or documents.', '确认后移除保存的阅读位置，不删除导出音频或文档。'))
+      .addButton((button) => button.setButtonText(label('Clear positions…', '清除记录…')).onClick(() => this.plugin.confirmClearReadingPositions()));
     new Setting(containerEl)
       .setName(ui.feedback)
       .setDesc(ui.feedbackDesc)
