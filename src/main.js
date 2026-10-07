@@ -540,6 +540,7 @@ class NoteReaderMobilePlugin extends Plugin {
       if (this.queue.items.length && !['complete', 'error'].includes(this.queue.status)) this.togglePause();
       else this.runSafely(() => this[({ selection: 'readSelection', from: 'readFromSelection', saved: 'resumeFile' })[scope.value] || 'readFile']());
     } });
+    const stop = createButton(controls, { icon: 'square', iconOnly: true, label: ui.stop, onClick: () => this.stopReading({ quiet: true }) });
     const next = createButton(controls, { icon: 'skip-forward', iconOnly: true, label: ui.next, onClick: () => this.moveChunk(1) });
     const timeline = controls.createDiv({ cls: 'note-reader-mobile-dock-timeline' });
     const seek = timeline.createEl('input', { cls: 'note-reader-mobile-range' });
@@ -553,7 +554,7 @@ class NoteReaderMobilePlugin extends Plugin {
     const speed = controls.createEl('select'); speed.setAttr('aria-label', ui.speed);
     for (const value of SPEED_PRESETS) { const option = speed.createEl('option', { text: `${value}x` }); option.value = String(value); }
     speed.addEventListener('change', () => this.runSafely(() => this.setPlaybackSpeed(Number(speed.value))));
-    this.dock = { root, host, language: this.settings.settingsLanguage, scope, play, previous, next, seek, speed, status, isScrubbing: () => scrubbing };
+    this.dock = { root, host, language: this.settings.settingsLanguage, scope, play, stop, previous, next, seek, speed, status, isScrubbing: () => scrubbing };
     this.updateToolbar();
   }
 
@@ -568,6 +569,7 @@ class NoteReaderMobilePlugin extends Plugin {
     refs.play.setAttr('aria-label', label); refs.play.setAttr('title', label);
     refs.scope.disabled = !!active || this.phaseOverride === 'extracting';
     refs.play.disabled = this.phaseOverride === 'extracting';
+    refs.stop.disabled = !this.queue.items.length && this.phaseOverride !== 'extracting';
     refs.previous.disabled = this.queue.currentIndex <= 0;
     refs.next.disabled = this.queue.currentIndex < 0 || this.queue.currentIndex >= this.queue.items.length - 1;
     refs.seek.disabled = !this.canSeekAudio();

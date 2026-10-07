@@ -119,6 +119,45 @@ test('toolbar stays inside the source view, survives refresh, and closes without
   assert.equal(plugin.dock, null);
 });
 
+test('toolbar Stop cancels audio and resets controls without closing the source or toolbar', () => {
+  const plugin = fixture({ speechEngine: 'mimo', settingsLanguage: 'chinese' });
+  const source = sourceFixture(plugin);
+  let paused = false;
+  plugin.activeAudio = { currentTime: 2, duration: 30, pause() { paused = true; }, removeAttribute() {}, load() {} };
+  plugin.showToolbar();
+  const dock = plugin.dock;
+  const sessionId = plugin.sessionId;
+  assert.equal(dock.stop.attrs['aria-label'], '停止');
+  assert.equal(dock.stop.disabled, false);
+  dock.stop.events.click();
+  assert.equal(paused, true);
+  assert.ok(plugin.sessionId > sessionId);
+  assert.equal(plugin.queue.items.length, 0);
+  assert.equal(plugin.activeAudio, null);
+  assert.equal(plugin.dock, dock);
+  assert.equal(dock.root.isConnected, true);
+  assert.equal(plugin.toolbarEnabled, true);
+  assert.equal(plugin.app.workspace.activeLeaf, source);
+  assert.equal(dock.stop.disabled, true);
+  assert.equal(dock.scope.disabled, false);
+  assert.equal(dock.play.disabled, false);
+  assert.equal(dock.play.attrs['aria-label'], '朗读当前文件');
+});
+
+test('toolbar Stop is available during PDF extraction and invalidates the pending operation', () => {
+  const plugin = fixture();
+  sourceFixture(plugin, 'pdf');
+  const operationId = plugin.beginOperation('extracting');
+  const dock = plugin.dock;
+  assert.equal(dock.stop.disabled, false);
+  assert.equal(dock.play.disabled, true);
+  dock.stop.events.click();
+  assert.notEqual(plugin.sessionId, operationId);
+  assert.equal(plugin.phaseOverride, '');
+  assert.equal(plugin.dock, dock);
+  assert.equal(dock.play.disabled, false);
+});
+
 test('panel has return and close controls; returning preserves playback and focuses source', async () => {
   const plugin = fixture({ settingsLanguage: 'chinese' });
   const source = sourceFixture(plugin);

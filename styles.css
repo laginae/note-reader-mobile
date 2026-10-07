@@ -86,7 +86,7 @@
 
 @container note-reader-mobile-pane (max-width: 299px) {
   .note-reader-mobile-dock .note-reader-mobile-dock-controls {
-    grid-template-columns: 44px 44px 44px minmax(0, 1fr);
+    grid-template-columns: 44px 44px 44px 44px minmax(0, 1fr);
   }
   .note-reader-mobile-dock .note-reader-mobile-dock-timeline {
     grid-row: 2;
@@ -103,7 +103,7 @@
 
 .note-reader-mobile-dock-controls {
   display: grid;
-  grid-template-columns: 44px 44px 44px minmax(32px, 1fr) 64px;
+  grid-template-columns: 44px 44px 44px 44px minmax(32px, 1fr) 64px;
   gap: 2px;
   align-items: center;
 }

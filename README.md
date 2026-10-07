@@ -4,7 +4,7 @@
 
 A mobile-first Obsidian read-aloud plugin for Markdown notes and text-based PDFs.
 
-**0.2.3 is a mobile testing release.** Automated checks are included; full Android and iOS device validation remains pending. This is a separate plugin and does not change the desktop edition.
+**0.2.4 is a mobile testing release.** Automated checks are included; full Android and iOS device validation remains pending. This is a separate plugin and does not change the desktop edition.
 
 ## Install and Start
 
@@ -21,7 +21,7 @@ This release is not a community-directory submission. Avoid starting the desktop
 
 The reader icon and `Show reading toolbar` command open a compact bar above the current note or PDF, below its title bar, without switching to a separate tab. The controls reserve their own space outside the document scroll area to avoid iOS floating bottom navigation. Select a reading scope and press Play. Pause/resume, previous/next chunk, current-audio seeking and playback speed are available beside the document. Seeking only applies to loaded online audio, not system speech.
 
-Expand opens the full player. Its back arrow returns to the document without stopping playback; Close stops and hides the reader. Select text and choose Continue from selection to start there. The source selection is retained in memory before opening the panel, not written to settings; select it again after editing the document.
+The square Stop button ends reading or cancels PDF extraction while keeping the bar open. Expand opens the full player. Its back arrow returns to the document without stopping playback; Close stops and hides the reader. Select text and choose Continue from selection to start there. The source selection is retained in memory before opening the panel, not written to settings; select it again after editing the document. Stopping cannot undo a speech request already sent to a provider or its charges.
 
 On phones, opening the reading bar temporarily keeps the current pane's native title controls in normal layout below the status-bar safe area; closing the bar restores the original layout. On iPad, the bar uses a single row in wide panes and stacked rows in narrow Split View or Stage Manager windows. It does not apply phone-specific status padding to tablet panes. iOS/Android device verification is still needed, particularly for rotation, keyboards, native selection menus and PDF views.
 
@@ -78,7 +78,9 @@ It must return MP3 or WAV bytes. If a remote secret is selected, it is sent as a
 
 ## Playback and Limits
 
-| Capability | Mobile 0.2.3 testing edition | Desktop 0.9.4 |
+PDF column ordering does not include dedicated header/footer filtering or footnote separation in the mobile edition. Page numbers, running author/journal lines and footnotes can still enter the speech text. These desktop features have not yet been ported; selecting body text limits what is read without changing the PDF.
+
+| Capability | Mobile 0.2.4 testing edition | Desktop 0.9.4 |
 | --- | --- | --- |
 | Markdown and text PDFs | Supported; device testing pending | Supported |
 | MiMo and custom speech APIs | Added; device/provider checks pending | Available |

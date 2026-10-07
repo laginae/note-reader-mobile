@@ -32,7 +32,7 @@ test('iPad layout uses pane container width and supports narrow split windows wi
   assert.match(rule('.note-reader-mobile-docked-view'), /container-type: inline-size/);
   assert.match(css, /@container note-reader-mobile-pane \(min-width: 680px\)/);
   assert.match(css, /@container note-reader-mobile-pane \(max-width: 299px\)/);
-  assert.match(rule('.note-reader-mobile-dock .note-reader-mobile-dock-controls'), /44px 44px 44px minmax\(0, 1fr\)/);
+  assert.match(rule('.note-reader-mobile-dock .note-reader-mobile-dock-controls'), /44px 44px 44px 44px minmax\(0, 1fr\)/);
   assert.match(rule('.note-reader-mobile-dock .note-reader-mobile-dock-timeline'), /grid-column: 1 \/ -1/);
   assert.doesNotMatch(rule('.note-reader-mobile-docked-view'), /padding-top/);
 });
