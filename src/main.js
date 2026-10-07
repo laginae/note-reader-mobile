@@ -36,7 +36,12 @@ const {
   getOpenRouterVoices,
   normalizeSettings,
 } = require('./config');
-const { extractPdfPages } = require('./pdf-extractor');
+const { extractPdfPages, extractPdfDocument } = require('./pdf-extractor');
+const { buildPdfOutline, sectionPages, outlineKey } = require('./pdf-outline');
+const { PdfOutlineModal } = require('./pdf-outline-ui');
+const { normalizeFootnoteMode, splitFootnotesInRange } = require('./pdf-footnotes');
+const { MAX_HTML_BYTES, isHtmlFile, extractHtmlText, htmlReaderDocument, captureHtmlSelection } = require('./html-text');
+const { AudioExportModal } = require('./audio-export-ui');
 const { synthesizeOnlineChunk } = require('./speech-services');
 const { BYOK_PROVIDERS, updateByokProfile, hasByokConsent, grantByokConsent, getByokConfigurationError } = require('./byok');
 
@@ -52,6 +57,11 @@ const UI = {
     backToText: 'Back to document',
     closeReader: 'Stop and close reader',
     readingScope: 'Reading scope',
+    pdfOutline: 'PDF outline',
+    exportAudio: 'Export reading audio',
+    exportUnavailable: 'Start a reading range with an online engine first. Device system speech cannot be exported.',
+    readFootnotes: 'Read PDF footnotes only',
+    noFootnotes: 'No confidently identified footnotes were found in this range.',
     idle: 'Ready',
     extracting: 'Extracting PDF locally',
     synthesizing: 'Synthesizing current chunk',
@@ -70,7 +80,7 @@ const UI = {
     previous: 'Previous chunk',
     next: 'Next chunk',
     noSelection: 'Select text in a note or PDF first.',
-    noFile: 'Open a Markdown note or PDF first.',
+    noFile: 'Open a Markdown note, local HTML file or PDF first.',
     noResume: 'No saved reading position exists for this file.',
     sourceSelection: 'selection',
     sourceFile: 'file',
@@ -143,6 +153,11 @@ const UI = {
     backToText: '返回正文',
     closeReader: '停止并关闭朗读器',
     readingScope: '朗读范围',
+    pdfOutline: 'PDF 大纲',
+    exportAudio: '导出朗读音频',
+    exportUnavailable: '请先使用在线引擎开始一个朗读范围。设备系统语音不支持导出。',
+    readFootnotes: '只读 PDF 脚注',
+    noFootnotes: '此范围内没有可靠识别出的脚注。',
     idle: '已就绪',
     extracting: '正在本地解析 PDF',
     synthesizing: '正在合成当前分段',
@@ -161,7 +176,7 @@ const UI = {
     previous: '上一分段',
     next: '下一分段',
     noSelection: '请先在笔记或 PDF 中选择文字。',
-    noFile: '请先打开 Markdown 笔记或 PDF。',
+    noFile: '请先打开 Markdown 笔记、本地 HTML 文件或 PDF。',
     noResume: '当前文件没有已保存的朗读位置。',
     sourceSelection: '选中文字',
     sourceFile: '当前文件',
@@ -302,7 +317,7 @@ class NoteReaderMobileView extends ItemView {
   }
 
   getDisplayText() {
-    return 'Note Reader Mobile';
+    return 'Note and PDF Voice Reader';
   }
 
   getIcon() {
@@ -340,6 +355,9 @@ class NoteReaderMobilePlugin extends Plugin {
     this.addCommand({ id: 'read-selection', name: 'Read selected text', callback: () => this.runSafely(() => this.readSelection()) });
     this.addCommand({ id: 'read-from-selection', name: 'Continue reading from selection', callback: () => this.runSafely(() => this.readFromSelection()) });
     this.addCommand({ id: 'read-file', name: 'Read active note or PDF', callback: () => this.runSafely(() => this.readFile()) });
+    this.addCommand({ id: 'pdf-outline', name: 'Open PDF outline', callback: () => this.openPdfOutline() });
+    this.addCommand({ id: 'export-audio', name: 'Export current reading range to WAV', callback: () => this.openAudioExport() });
+    this.addCommand({ id: 'read-pdf-footnotes', name: 'Read PDF footnotes only', callback: () => this.runSafely(() => this.readFootnotes()) });
     this.addCommand({ id: 'resume-file', name: 'Resume active file', callback: () => this.runSafely(() => this.resumeFile()) });
     this.addCommand({ id: 'toggle-pause', name: 'Pause or resume reading', callback: () => this.togglePause() });
     this.addCommand({ id: 'stop-reading', name: 'Stop reading', callback: () => this.stopReading() });
@@ -351,6 +369,7 @@ class NoteReaderMobilePlugin extends Plugin {
     }));
     this.registerEvent(this.app.vault.on('modify', (file) => {
       if (this.selectionSnapshot?.filePath === file.path) this.selectionSnapshot = null;
+      if (this.pdfOutlineCache?.path === file.path) this.pdfOutlineCache = null;
     }));
     this.registerDomEvent(document, 'selectionchange', () => this.captureSelection());
     this.registerDomEvent(document, 'pointerdown', (event) => {
@@ -382,6 +401,10 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   onunload() {
+    this.exportModal?.close();
+    this.clearHtmlSelectionListener();
+    this.outlineModal?.close();
+    this.pdfOutlineCache = null;
     this.toolbarEnabled = false;
     this.removeToolbar();
     this.selectionSnapshot = null;
@@ -398,7 +421,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   speechConfigurationKey() {
-    const { speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, ...speech } = this.settings;
+    const { speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, ...speech } = this.settings;
     return JSON.stringify(speech);
   }
 
@@ -453,7 +476,11 @@ class NoteReaderMobilePlugin extends Plugin {
     if (!view?.file || this.app.workspace.activeLeaf !== leaf) return;
     const editorText = view.getMode?.() === 'preview' ? '' : String(view.editor?.getSelection?.() || '').trim();
     let context;
-    if (editorText) {
+    if (isHtmlFile(view.file)) {
+      const htmlDocument = htmlReaderDocument(view);
+      const captured = captureHtmlSelection(htmlDocument);
+      if (captured) context = { ...captured, htmlDocument };
+    } else if (editorText) {
       context = { text: editorText, from: view.editor.getCursor('from'), pageNumber: 1 };
     } else if (typeof window !== 'undefined') {
       const selection = window.getSelection?.();
@@ -471,7 +498,8 @@ class NoteReaderMobilePlugin extends Plugin {
     const saved = this.selectionSnapshot;
     const leaf = this.getSourceLeaf();
     return saved && saved.leaf === leaf && saved.filePath === leaf?.view?.file?.path
-      && saved.mtime === leaf.view.file.stat?.mtime ? saved : null;
+      && saved.mtime === leaf.view.file.stat?.mtime
+      && (!isHtmlFile(leaf.view.file) || saved.htmlDocument === htmlReaderDocument(leaf.view)) ? saved : null;
   }
 
   showToolbar() {
@@ -504,11 +532,12 @@ class NoteReaderMobilePlugin extends Plugin {
     if (!this.toolbarEnabled) return;
     const leaf = this.getSourceLeaf();
     const host = leaf?.view?.containerEl;
-    if (!host || !['md', 'markdown', 'txt', 'pdf'].includes(String(leaf.view.file?.extension).toLowerCase())) {
+    if (!host || !['md', 'markdown', 'txt', 'pdf', 'html', 'htm'].includes(String(leaf.view.file?.extension).toLowerCase())) {
       this.removeToolbar();
       return;
     }
     this.sourceLeaf = leaf;
+    this.syncHtmlSelectionListener(leaf);
     if (this.dock?.host === host && this.dock.root.isConnected && this.dock.language === this.settings.settingsLanguage) {
       this.updateToolbar();
       return;
@@ -527,18 +556,19 @@ class NoteReaderMobilePlugin extends Plugin {
     const header = root.createDiv({ cls: 'note-reader-mobile-dock-header' });
     const scope = header.createEl('select');
     scope.setAttr('aria-label', ui.readingScope);
-    for (const [value, label] of [['file', ui.readFile], ['selection', ui.readSelection], ['from', ui.readFromSelection], ['saved', ui.resumeFile]]) {
+    for (const [value, label] of [['file', ui.readFile], ['selection', ui.readSelection], ['from', ui.readFromSelection], ['saved', ui.resumeFile], ['footnotes', ui.readFootnotes]]) {
       const option = scope.createEl('option', { text: label }); option.value = value;
     }
     scope.value = this.readingScope || 'file';
     scope.addEventListener('change', () => { this.readingScope = scope.value; this.updateToolbar(); });
+    const outline = createButton(header, { icon: 'list-tree', iconOnly: true, label: ui.pdfOutline, onClick: () => this.openPdfOutline() });
     createButton(header, { icon: 'panel-top', iconOnly: true, label: ui.openPanel, onClick: () => this.runSafely(() => this.activateView()) });
     createButton(header, { icon: 'x', iconOnly: true, label: ui.closeReader, onClick: () => this.runSafely(() => this.closeReader()) });
     const controls = root.createDiv({ cls: 'note-reader-mobile-dock-controls' });
     const previous = createButton(controls, { icon: 'skip-back', iconOnly: true, label: ui.previous, onClick: () => this.moveChunk(-1) });
     const play = createButton(controls, { icon: 'play', iconOnly: true, label: ui.readFile, onClick: () => {
       if (this.queue.items.length && !['complete', 'error'].includes(this.queue.status)) this.togglePause();
-      else this.runSafely(() => this[({ selection: 'readSelection', from: 'readFromSelection', saved: 'resumeFile' })[scope.value] || 'readFile']());
+      else this.runSafely(() => this[({ selection: 'readSelection', from: 'readFromSelection', saved: 'resumeFile', footnotes: 'readFootnotes' })[scope.value] || 'readFile']());
     } });
     const stop = createButton(controls, { icon: 'square', iconOnly: true, label: ui.stop, onClick: () => this.stopReading({ quiet: true }) });
     const next = createButton(controls, { icon: 'skip-forward', iconOnly: true, label: ui.next, onClick: () => this.moveChunk(1) });
@@ -554,7 +584,7 @@ class NoteReaderMobilePlugin extends Plugin {
     const speed = controls.createEl('select'); speed.setAttr('aria-label', ui.speed);
     for (const value of SPEED_PRESETS) { const option = speed.createEl('option', { text: `${value}x` }); option.value = String(value); }
     speed.addEventListener('change', () => this.runSafely(() => this.setPlaybackSpeed(Number(speed.value))));
-    this.dock = { root, host, language: this.settings.settingsLanguage, scope, play, stop, previous, next, seek, speed, status, isScrubbing: () => scrubbing };
+    this.dock = { root, host, header, outline, language: this.settings.settingsLanguage, scope, play, stop, previous, next, seek, speed, status, isScrubbing: () => scrubbing };
     this.updateToolbar();
   }
 
@@ -562,8 +592,14 @@ class NoteReaderMobilePlugin extends Plugin {
     const refs = this.dock;
     if (!refs) return;
     const ui = getUi(this.settings);
+    const isPdf = String(this.getSourceLeaf()?.view.file?.extension).toLowerCase() === 'pdf';
+    refs.outline.hidden = !isPdf;
+    refs.header.toggleClass('has-pdf-outline', isPdf);
+    const footnotesOption = Array.from(refs.scope.children).find((child) => child.value === 'footnotes');
+    footnotesOption.hidden = footnotesOption.disabled = !isPdf;
+    if (!isPdf && refs.scope.value === 'footnotes') { refs.scope.value = 'file'; this.readingScope = 'file'; }
     const active = this.queue.items.length > 0 && !['complete', 'error'].includes(this.queue.status);
-    const label = active ? (this.pauseRequested ? ui.resume : ui.pause) : ui[({ selection: 'readSelection', from: 'readFromSelection', saved: 'resumeFile' })[refs.scope.value] || 'readFile'];
+    const label = active ? (this.pauseRequested ? ui.resume : ui.pause) : ui[({ selection: 'readSelection', from: 'readFromSelection', saved: 'resumeFile', footnotes: 'readFootnotes' })[refs.scope.value] || 'readFile'];
     const icon = active && !this.pauseRequested ? 'pause' : 'play';
     if (refs.icon !== icon) { setIcon(refs.play.firstElementChild, icon); refs.icon = icon; }
     refs.play.setAttr('aria-label', label); refs.play.setAttr('title', label);
@@ -679,14 +715,19 @@ class NoteReaderMobilePlugin extends Plugin {
     createButton(commands, { icon: 'list-start', label: ui.readFromSelection, onClick: () => this.runSafely(() => this.readFromSelection()) });
     createButton(commands, { icon: 'file-audio', label: ui.readFile, onClick: () => this.runSafely(() => this.readFile()) });
     createButton(commands, { icon: 'history', label: ui.resumeFile, onClick: () => this.runSafely(() => this.resumeFile()) });
+    const outline = createButton(commands, { icon: 'list-tree', label: ui.pdfOutline, onClick: () => this.openPdfOutline() });
+    const footnotes = createButton(commands, { icon: 'text-quote', label: ui.readFootnotes, onClick: () => this.runSafely(() => this.readFootnotes()) });
+    const exportAudio = createButton(commands, { icon: 'download', label: ui.exportAudio, onClick: () => this.openAudioExport() });
     const text = containerEl.createEl('p', { cls: 'note-reader-mobile-current-text' });
-    const refs = { language: this.settings.settingsLanguage, ui, phaseEl, sourceEl, previous, next, progress, back, forward, pause, stop, seek, time, speedLabel, speedButtons, systemNote, volumeLabel, volume, text, isScrubbing: () => scrubbing };
+    const refs = { language: this.settings.settingsLanguage, ui, phaseEl, sourceEl, previous, next, progress, back, forward, pause, stop, seek, time, speedLabel, speedButtons, systemNote, volumeLabel, volume, outline, footnotes, exportAudio, text, isScrubbing: () => scrubbing };
     this.playerViews.set(containerEl, refs);
     this.updatePlayer(refs);
   }
 
   updatePlayer(refs) {
     const { ui } = refs;
+    refs.outline.hidden = refs.footnotes.hidden = String(this.getSourceLeaf()?.view.file?.extension).toLowerCase() !== 'pdf';
+    refs.exportAudio.disabled = this.settings.speechEngine === 'system' || !this.queue.items.length;
     const phase = this.pauseRequested ? 'paused' : this.phaseOverride || this.queue.status;
     refs.phaseEl.textContent = this.pauseRequested ? (this.playbackBlocked ? ui.audioBlocked : ui.paused) : this.statusDetail || ui[phase] || ui.idle;
     refs.phaseEl.className = `note-reader-mobile-phase is-${phase}`;
@@ -815,6 +856,13 @@ class NoteReaderMobilePlugin extends Plugin {
       new Notice(!file ? ui.noFile : ui.noSelection);
       return;
     }
+    if (isHtmlFile(file)) {
+      const selected = this.getSelectionSnapshot();
+      if (selected?.htmlFrom) {
+        this.startTextSession(selected.htmlFrom, { file, kind: 'markdown', sourceLabel: ui.sourceSelection });
+      } else await this.readHtml(file, selectedText, ui.sourceSelection);
+      return;
+    }
     if (String(file.extension || '').toLowerCase() === 'pdf') {
       const selection = this.getSelectionSnapshot() || { text: selectedText, pageNumber: 1 };
       await this.readPdf(file, {
@@ -840,6 +888,7 @@ class NoteReaderMobilePlugin extends Plugin {
       new Notice(ui.noFile);
       return;
     }
+    if (isHtmlFile(file)) { await this.readHtml(file, '', ui.sourceFile); return; }
     if (String(file.extension || '').toLowerCase() === 'pdf') {
       await this.readPdf(file, { sourceLabel: ui.sourceFile, startPageNumber: 1 });
       return;
@@ -860,6 +909,7 @@ class NoteReaderMobilePlugin extends Plugin {
       new Notice(!file ? ui.noFile : ui.noResume);
       return;
     }
+    if (isHtmlFile(file)) { await this.readHtml(file, position.anchor, ui.sourceResume); return; }
     if (position.kind === 'pdf' && String(file.extension || '').toLowerCase() === 'pdf') {
       await this.readPdf(file, {
         anchor: position.anchor,
@@ -879,6 +929,93 @@ class NoteReaderMobilePlugin extends Plugin {
       : String(text || '').replace(/\r\n?/g, '\n').trim();
   }
 
+  openAudioExport() {
+    if (this.settings.speechEngine === 'system' || !this.queue.items.length) { new Notice(getUi(this.settings).exportUnavailable); return; }
+    if (this.exportModal && !this.exportModal.closed) return;
+    this.exportModal = new AudioExportModal(this); this.exportModal.open();
+  }
+
+  clearHtmlSelectionListener() {
+    if (this.htmlSelectionBinding) {
+      const { doc, listener, pointer } = this.htmlSelectionBinding;
+      doc.removeEventListener('selectionchange', listener);
+      doc.removeEventListener('pointerdown', pointer);
+      this.htmlSelectionBinding = null;
+    }
+  }
+
+  syncHtmlSelectionListener(leaf) {
+    const doc = isHtmlFile(leaf?.view.file) ? htmlReaderDocument(leaf.view) : null;
+    if (this.htmlSelectionBinding?.doc === doc) return;
+    this.clearHtmlSelectionListener();
+    if (doc) {
+      const listener = () => { if (this.app.workspace.activeLeaf === leaf) this.captureSelection(); };
+      const pointer = () => { if (this.app.workspace.activeLeaf === leaf) this.selectionSnapshot = null; };
+      doc.addEventListener('selectionchange', listener);
+      doc.addEventListener('pointerdown', pointer);
+      this.htmlSelectionBinding = { doc, listener, pointer };
+    }
+  }
+
+  async readHtml(file, anchor, sourceLabel) {
+    if (file.stat?.size > MAX_HTML_BYTES) throw new Error('HTML exceeds the 20 MiB limit.');
+    const operation = this.beginOperation('extracting');
+    const mtime = file.stat?.mtime;
+    const source = await this.app.vault.cachedRead(file);
+    if (operation !== this.sessionId) return;
+    if (file.stat?.mtime !== mtime) throw new Error('HTML changed; select the starting point again.');
+    let text = extractHtmlText(source, this.settings.stripMarkdown ? academicOptions(this.settings) : {});
+    if (anchor) {
+      const sliced = sliceTextFromReadingPosition(text, { anchor });
+      if (!sliced.matched) throw new Error('Could not find the selected/saved HTML position. Select it again in HTML Reader. / 无法定位所选或保存位置，请在 HTML Reader 中重新选择。');
+      text = sliced.text;
+    }
+    this.startTextSession(text, { file, kind: 'markdown', sourceLabel });
+  }
+
+  openPdfOutline() {
+    const file = this.getActiveFile();
+    if (String(file?.extension).toLowerCase() !== 'pdf') { new Notice(getUi(this.settings).noFile); return; }
+    if (this.outlineModal?.file === file && !this.outlineModal.closed) return;
+    this.outlineModal?.close();
+    this.outlineModal = new PdfOutlineModal(this, file);
+    this.outlineModal.open();
+  }
+
+  async loadPdfOutline(file, isCancelled, onProgress, force = false) {
+    const key = outlineKey(file, this.settings.pdfSkipHeaders);
+    if (!force && this.pdfOutlineCache?.key === key) return this.pdfOutlineCache;
+    // Retain only one parsed PDF in memory; never put document text in settings.
+    this.pdfOutlineCache = null;
+    const result = await extractPdfDocument(this.app, file, {
+      loadPdfJs, includeOutline: true, skipHeaders: this.settings.pdfSkipHeaders, isCancelled, onProgress,
+    });
+    if (isCancelled()) return null;
+    if (!this.isOutlineCurrent(file, key)) throw new Error('PDF or settings changed.');
+    const cached = { path: file.path, key, data: buildPdfOutline(result.pages, result.bookmarks) };
+    this.pdfOutlineCache = cached;
+    return cached;
+  }
+
+  isOutlineCurrent(file, key) {
+    return outlineKey(file, this.settings.pdfSkipHeaders) === key
+      && (!this.app.vault.getAbstractFileByPath || this.app.vault.getAbstractFileByPath(file.path) === file);
+  }
+
+  readPdfSection(file, key, data, index, remaining) {
+    if (!this.isOutlineCurrent(file, key) || this.getActiveFile() !== file) throw new Error('PDF or settings changed.');
+    const pages = sectionPages(data, index, remaining);
+    const chunks = this.buildPdfChunks(pages, {});
+    if (!chunks.length) throw new Error('No readable text in the section.');
+    this.startPreparedChunks(chunks, { file, kind: 'pdf', sourceLabel: data.entries[index].title });
+  }
+
+  async readFootnotes() {
+    const file = this.getActiveFile();
+    if (String(file?.extension).toLowerCase() !== 'pdf') { new Notice(getUi(this.settings).noFile); return; }
+    await this.readPdf(file, { startPageNumber: 1, footnoteMode: 'footnotes', sourceLabel: getUi(this.settings).readFootnotes });
+  }
+
   buildPdfChunks(pages, context) {
     const chunker = createIncrementalSpeechChunker(
       this.getChunkLimits(),
@@ -895,6 +1032,11 @@ class NoteReaderMobilePlugin extends Plugin {
           const original = sliceTextFromReadingPosition(page.unfilteredText, { anchor: context.anchor });
           if (original.matched) text = original.text;
         }
+      }
+      const mode = normalizeFootnoteMode(context.footnoteMode || this.settings.pdfFootnoteMode);
+      if (mode !== 'inline') {
+        const parts = splitFootnotesInRange(text, page.layout?.lines.filter((line) => line.footnote) || []);
+        text = mode === 'footnotes' ? parts.notes : parts.body;
       }
       const clean = this.prepareText(text);
       chunks.push(...chunker.push(clean, { pageNumber: page.pageNumber }));
@@ -921,6 +1063,9 @@ class NoteReaderMobilePlugin extends Plugin {
         return;
       }
       const chunks = this.buildPdfChunks(pages, context);
+      if (!chunks.length && (context.footnoteMode || this.settings.pdfFootnoteMode) === 'footnotes') {
+        this.stopReading({ quiet: true }); new Notice(ui.noFootnotes); return;
+      }
       this.startPreparedChunks(chunks, {
         file,
         kind: 'pdf',
@@ -1578,11 +1723,20 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
     const zh = this.plugin.settings.settingsLanguage === 'chinese';
     const label = (en, cn) => zh ? cn : en;
     new Setting(containerEl).setName(label('Skip PDF headers and footers', '跳过 PDF 页眉页脚'))
-      .setDesc(label('On by default. Locally filters repeated short edge lines and page numbers. Uncertain text, footnotes and selection-only reading are preserved. Applies to the next reading session; disable if body text is omitted.', '默认开启。在本地过滤页边重复短行和页码；不确定的文字、脚注和仅选中文字保留。下次朗读生效；发现正文误删时可关闭。'))
+      .setDesc(label('Locally filters repeated short edge lines and page numbers. Uncertain text and selection-only reading are preserved. Applies to the next reading session; disable if body text is omitted.', '在本地过滤页边重复短行和页码；不确定的文字和仅选中文字保留。下次朗读生效；发现正文误删时可关闭。'))
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.pdfSkipHeaders).onChange(async (value) => {
         this.plugin.settings.pdfSkipHeaders = value;
         await this.plugin.saveSettings();
       }));
+    new Setting(containerEl).setName(label('PDF footnote reading', 'PDF 脚注朗读'))
+      .setDesc(label('Body only by default. Uses bottom-page markers, smaller type and spacing to identify notes and first-page correspondence blocks. Uncertain text and selection-only reading are preserved. Applies next session.', '默认只读正文。结合页底标号、小字号及间距识别脚注和首页作者信息；不确定的文字及仅选中文字保留。下次朗读生效。'))
+      .addDropdown((dropdown) => dropdown.addOption('body', label('Body only', '只读正文'))
+        .addOption('inline', label('Original order, including footnotes', '保留原顺序（含脚注）'))
+        .addOption('footnotes', label('Footnotes only', '只读脚注'))
+        .setValue(this.plugin.settings.pdfFootnoteMode).onChange(async (value) => {
+          this.plugin.settings.pdfFootnoteMode = normalizeFootnoteMode(value);
+          await this.plugin.saveSettings();
+        }));
     for (const [key, name] of [['academicMathMode', label('Formula reading', '公式朗读')], ['academicTableMode', label('Table reading', '表格朗读')]]) {
       new Setting(containerEl).setName(name)
         .setDesc(label('Applies when Strip Markdown is enabled. Smart mode skips complex formulas or long numeric tables. All mode still omits formulas that cannot be parsed safely.', '开启“移除 Markdown 格式”后生效。智能模式跳过复杂公式或较长数字表格；完整模式仍会略过无法可靠解析的公式。'))

@@ -45,3 +45,12 @@ test('tablet button padding and iOS slider size cannot enlarge the compact contr
   assert.match(rule('.note-reader-mobile-dock'), /--slider-thumb-width: 12px/);
   assert.match(rule('.note-reader-mobile-dock'), /--slider-thumb-height: 12px/);
 });
+
+test('PDF outline reserves safe-area space and scrolls only its list while keeping actions accessible', () => {
+  assert.match(rule('.note-reader-mobile-outline-modal'), /100dvh/);
+  assert.match(rule('.note-reader-mobile-outline-modal'), /safe-area-inset-bottom/);
+  assert.match(rule('.note-reader-mobile-outline-list'), /overflow: auto/);
+  assert.match(rule('.note-reader-mobile-outline-header'), /44px 44px/);
+  assert.match(rule('.note-reader-mobile-dock-header.has-pdf-outline'), /minmax\(0, 1fr\) repeat\(3, 44px\)/);
+  assert.match(rule('.note-reader-mobile-outline button.note-reader-mobile-outline-row'), /min-height: 44px/);
+});

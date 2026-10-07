@@ -101,6 +101,124 @@
   align-items: center;
 }
 
+.note-reader-mobile-dock-header.has-pdf-outline {
+  grid-template-columns: minmax(0, 1fr) repeat(3, 44px);
+}
+
+.note-reader-mobile-dock [hidden],
+.note-reader-mobile-root [hidden],
+.note-reader-mobile-outline [hidden] {
+  display: none !important;
+}
+
+.note-reader-mobile-outline-modal {
+  width: min(680px, calc(100vw - 24px));
+  height: min(720px, calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.note-reader-mobile-outline-modal > .modal-close-button {
+  display: none;
+}
+
+.note-reader-mobile-outline {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.note-reader-mobile-outline-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 44px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.note-reader-mobile-outline h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: 0;
+}
+
+.note-reader-mobile-outline button.note-reader-mobile-icon-button {
+  width: 44px;
+  height: 44px;
+  padding: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.note-reader-mobile-outline-filename {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 0 auto;
+}
+
+.note-reader-mobile-outline-status,
+.note-reader-mobile-outline-filename,
+.note-reader-mobile-outline-page {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.note-reader-mobile-outline-status,
+.note-reader-mobile-outline input {
+  flex: 0 0 auto;
+}
+
+.note-reader-mobile-outline input {
+  width: 100%;
+  min-height: 44px;
+}
+
+.note-reader-mobile-outline-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-block: 1px solid var(--background-modifier-border);
+}
+
+.note-reader-mobile-outline button.note-reader-mobile-outline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  height: auto;
+  padding: 10px 8px;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  white-space: normal;
+  text-align: start;
+  line-height: 1.4;
+}
+
+.note-reader-mobile-outline button.note-reader-mobile-outline-row[data-level="2"] { padding-inline-start: 20px; }
+.note-reader-mobile-outline button.note-reader-mobile-outline-row[data-level="3"] { padding-inline-start: 32px; }
+.note-reader-mobile-outline button.note-reader-mobile-outline-row[data-level="4"] { padding-inline-start: 44px; }
+.note-reader-mobile-outline button.note-reader-mobile-outline-row.is-selected { background: var(--background-modifier-hover); color: var(--text-accent); }
+.note-reader-mobile-outline-title { min-width: 0; overflow-wrap: anywhere; }
+.note-reader-mobile-outline-page { flex: 0 0 auto; white-space: nowrap; }
+.note-reader-mobile-outline-footer { flex: 0 0 auto; }
+.note-reader-mobile-outline-selected { margin-bottom: 8px; overflow: auto; max-height: 3em; overflow-wrap: anywhere; }
+.note-reader-mobile-outline button.note-reader-mobile-command-button { height: auto; min-height: 44px; }
+
+.note-reader-mobile-export { overflow-wrap: anywhere; }
+.note-reader-mobile-export h2 { font-size: 1.1rem; letter-spacing: 0; }
+.note-reader-mobile-export input { display: block; width: 100%; min-height: 44px; margin-block: 8px; }
+.note-reader-mobile-export .note-reader-mobile-command-button { height: auto; min-height: 44px; }
+
 .note-reader-mobile-dock-controls {
   display: grid;
   grid-template-columns: 44px 44px 44px 44px minmax(32px, 1fr) 64px;

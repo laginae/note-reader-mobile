@@ -1,6 +1,8 @@
 # Mobile Device Validation
 
-Version: 0.2.5. Status: **full Android and iOS device validation pending**. Initial iOS feedback identified panel-exit and selection problems in 0.2.0, bottom-navigation overlap in 0.2.1, and status/header overlap in 0.2.2. The new safe-area/header-flow fix still needs device retesting.
+Version: 0.3.0. Status: **basic iPhone workflow confirmed by a user; new features and broader device coverage pending**. On 2026-10-07, the user explicitly confirmed full-file reading, starting from selected text, pause/resume, Stop, speed adjustment and a toolbar no longer obscured in their iPhone setup. Exact device/OS versions were not provided. This is user-reported validation of the prior basic workflow, not a claim that all 0.3.0 additions passed device tests.
+
+Initial iOS feedback identified panel-exit and selection problems in 0.2.0, bottom-navigation overlap in 0.2.1, and status/header overlap in 0.2.2. Complex PDFs may still have issues. iPad, Android, other themes and the new outline/footnote/HTML/export workflows remain pending.
 
 Use a public sample note/PDF and a dedicated test key with a small spending cap. Record OS, Obsidian, WebView versions and date. Do not attach keys, private files or device identifiers to issues.
 
@@ -29,7 +31,11 @@ Use a public sample note/PDF and a dedicated test key with a small spending cap.
 - Revoke consent/change engine/model/endpoint during a pending response; old audio must not start.
 - Test quota/auth/network/timeout failures; no automatic retry or raw response/credential disclosure.
 - Test incomplete MiMo generation; no silent skip.
+- Open a PDF outline with bookmarks and without bookmarks. Search, read a parent/child section, continue from a section and close during scanning. Reopen unchanged files without rescanning; modify the file and confirm invalidation.
+- Compare body-only, original-order and footnotes-only reading on single-/two-column papers and a first-page author block. Include same-size numbered body paragraphs and small tables to check false positives.
+- Install HTML Reader, open a local HTML/HTM file and check full-file, selected text, exact selected position and resume. Include duplicate sentences, iframe reload and changing files. Confirm an inaccessible frame fails safely.
+- Confirm an online export for a short public range. Check WAV playback, normal speed, filename collision handling and vault sync expectations. Close during synthesis and confirm no later chunks are requested. Test provider failure, consent change, unsupported decoding and size limits; do not use paid accounts without an explicit spending decision.
 
 ## Release Gate
 
-Only mark scenarios passed after device observation. Automated checks do not satisfy device tests. Until complete, keep GitHub releases marked as testing prereleases and do not claim community-directory readiness.
+Only mark scenarios passed after device observation or an explicit, attributed user report. Automated checks do not satisfy device tests. Keep early GitHub releases marked as prereleases; the user has requested community submission with the limited validation status disclosed. Community acceptance is a separate review outcome, not proof of complete device coverage.

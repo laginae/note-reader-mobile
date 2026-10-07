@@ -15,6 +15,7 @@ Module._load = function loadWithObsidianMock(request, parent, isMain) {
   if (request === 'obsidian') {
     return {
       ItemView: MockItemView,
+      Modal: class {},
       MarkdownView: MockMarkdownView,
       Notice: MockNotice,
       Plugin: MockPlugin,

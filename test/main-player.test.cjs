@@ -54,12 +54,15 @@ class Setting {
   addComponent(callback) { this.input = callback({}); return this; }
 }
 let synthesize = async () => ({ arrayBuffer: new ArrayBuffer(8), mimeType: 'audio/mpeg' });
+let pdfLoader = async () => ({});
 const originalLoad = Module._load;
 let loaded;
 let actualServices;
 try {
   Module._load = function(request, parent, isMain) {
     if (request === 'obsidian') return { Plugin: class {}, ItemView: class {}, MarkdownView: class {}, Notice: class {},
+      Modal: class { constructor(app) { this.app = app; this.contentEl = new Element(); this.modalEl = new Element(); } open() { this.onOpen(); } close() { this.onClose(); } },
+      loadPdfJs: (...args) => pdfLoader(...args),
       PluginSettingTab: class { constructor(app) { this.app = app; this.containerEl = new Element(); } },
       Setting, SecretComponent: Control, setIcon: (element, icon) => { element.icon = icon; } };
     if (request === './speech-services') return { synthesizeOnlineChunk: (...args) => synthesize(...args) };
@@ -75,7 +78,7 @@ function fixture(overrides = {}) {
   plugin.queue = createPlaybackQueueState([{ id: 'one', text: 'First paragraph.' }, { id: 'two', text: 'Second paragraph.' }]);
   plugin.sessionId = 1; plugin.runId = 1; plugin.pauseRequested = false; plugin.resumeWaiters = [];
   plugin.sourceLabel = ''; plugin.statusDetail = ''; plugin.phaseOverride = '';
-  plugin.app = { secretStorage: {}, workspace: { getLeavesOfType: () => [] } };
+  plugin.app = { secretStorage: {}, vault: {}, workspace: { getLeavesOfType: () => [] } };
   plugin.saved = [];
   plugin.saveData = async (value) => plugin.saved.push(value);
   plugin.lastSpeechConfiguration = plugin.speechConfigurationKey();
@@ -458,6 +461,104 @@ test('PDF anchors use filtered body or the original first page when an explicit 
   assert.ok(edgeStart.startsWith(header));
   assert.equal(edgeStart.split(header).length - 1, 1);
   assert.match(edgeStart, /Later filtered body/);
+});
+
+test('PDF footnote modes affect playback chunks but not plain selection reading', async () => {
+  const plugin = fixture({ stripMarkdown: false });
+  const pages = [{ pageNumber: 1, text: 'Body text.\n1 Footnote text.', layout: { lines: [{ text: '1 Footnote text.', footnote: true }] } }];
+  const join = (context = {}) => plugin.buildPdfChunks(pages, context).map((chunk) => chunk.text).join(' ');
+  assert.equal(join(), 'Body text.');
+  assert.equal(join({ footnoteMode: 'footnotes' }), '1 Footnote text.');
+  assert.match(join({ footnoteMode: 'inline' }), /Body text/); assert.match(join({ footnoteMode: 'inline' }), /Footnote text/);
+  const session = plugin.sessionId;
+  const tab = new loaded.__test.NoteReaderMobileSettingTab(plugin.app, plugin); tab.activeTab = 'academic'; tab.display();
+  await tab.containerEl.rows.find((r) => r.name === 'PDF footnote reading').input.change('inline');
+  assert.equal(plugin.saved.at(-1).pdfFootnoteMode, 'inline'); assert.equal(plugin.sessionId, session);
+});
+
+test('PDF outline is cached in memory, invalidates on source/filter changes, and supports explicit refresh', async () => {
+  const plugin = fixture(), source = sourceFixture(plugin, 'pdf');
+  let reads = 0, destroyed = 0;
+  plugin.app.vault.readBinary = async () => { reads++; return new ArrayBuffer(4); };
+  pdfLoader = async () => ({ getDocument: () => ({ promise: Promise.resolve({ numPages: 1,
+    getPage: async () => ({ getTextContent: async () => ({ items: [
+      { str: '1. Introduction', width: 220, height: 12, transform: [12, 0, 0, 12, 40, 700] },
+      { str: 'Public body text sufficiently long to determine the ordinary font size.', width: 400, height: 10, transform: [10, 0, 0, 10, 40, 600] },
+    ] }), getViewport: () => ({ width: 600, height: 800 }), cleanup() {} }),
+    getOutline: async () => [], destroy: async () => { destroyed++; },
+  }) }) });
+  const first = await plugin.loadPdfOutline(source.view.file, () => false, () => {});
+  assert.equal(first.data.entries.length, 1);
+  assert.equal(await plugin.loadPdfOutline(source.view.file, () => false, () => {}), first);
+  assert.equal(reads, 1);
+  await plugin.loadPdfOutline(source.view.file, () => false, () => {}, true); assert.equal(reads, 2);
+  source.view.file.stat.mtime++;
+  await plugin.loadPdfOutline(source.view.file, () => false, () => {}); assert.equal(reads, 3);
+  plugin.settings.pdfSkipHeaders = false;
+  await plugin.loadPdfOutline(source.view.file, () => false, () => {}); assert.equal(reads, 4);
+  assert.equal(destroyed, 4); assert.equal(plugin.saved.length, 0);
+});
+
+test('outline modal is searchable, closes during loading, and ignores late results without interrupting playback', async () => {
+  const plugin = fixture({ settingsLanguage: 'chinese' }); sourceFixture(plugin, 'pdf');
+  let finish, isCancelled;
+  plugin.loadPdfOutline = (_file, cancelled) => { isCancelled = cancelled; return new Promise((resolve) => { finish = resolve; }); };
+  const queue = plugin.queue;
+  plugin.openPdfOutline(); const modal = plugin.outlineModal;
+  assert.ok(modal.contentEl.all().some((el) => el.attrs['aria-label'] === '关闭大纲'));
+  assert.equal(modal.readSection.disabled, true);
+  plugin.openPdfOutline(); assert.equal(plugin.outlineModal, modal);
+  modal.close(); assert.equal(isCancelled(), true);
+  finish({ key: 'test', data: { entries: [{ title: '1. Example', level: 1, page: 1 }], source: 'bookmarks' } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(plugin.outlineModal, null); assert.equal(plugin.queue, queue); assert.equal(modal.data, null);
+});
+
+test('outline UI binds selected section indices after filtering and does not rescan on search', async () => {
+  const plugin = fixture(); sourceFixture(plugin, 'pdf'); let loads = 0, read;
+  plugin.loadPdfOutline = async () => { loads++; return { key: 'test', data: { source: 'inferred', entries: [
+    { title: '1. Introduction', level: 1, page: 1 }, { title: '2. Methods', level: 1, page: 2 },
+  ] } }; };
+  plugin.readPdfSection = (...args) => { read = args; };
+  plugin.openPdfOutline(); const modal = plugin.outlineModal;
+  await new Promise((resolve) => setImmediate(resolve));
+  modal.search.value = 'Methods'; modal.search.events.input();
+  assert.equal(modal.rows.length, 1); modal.rows[0].row.events.click();
+  assert.equal(modal.readSection.disabled, false); modal.readRemaining.events.click();
+  assert.equal(read[3], 1); assert.equal(read[4], true); assert.equal(loads, 1); assert.equal(modal.closed, true);
+});
+
+test('HTML source reading, saved anchors and cancellation never pass markup to speech', async () => {
+  const plugin = fixture({ stripMarkdown: false }); const source = sourceFixture(plugin, 'html');
+  plugin.app.vault.cachedRead = async () => '<p>Earlier sentence.</p><p>Resume at this sentence.</p><script>never read</script>';
+  let result;
+  plugin.startTextSession = (text, context) => { result = { text, context }; };
+  await plugin.readFile(); assert.match(result.text, /Earlier/); assert.doesNotMatch(result.text, /<|never/);
+  plugin.settings.readingPositions[source.view.file.path] = { anchor: 'Resume at this sentence.', kind: 'markdown' };
+  await plugin.resumeFile(); assert.equal(result.text, 'Resume at this sentence.');
+  let finish; result = null; plugin.app.vault.cachedRead = () => new Promise((resolve) => { finish = resolve; });
+  const pending = plugin.readFile(); plugin.stopReading({ quiet: true }); finish('<p>Cancelled.</p>'); await pending;
+  assert.equal(result, null);
+});
+
+test('HTML rendered selection uses its exact remaining text and the toolbar supports local HTML', async () => {
+  const plugin = fixture(); const source = sourceFixture(plugin, 'html');
+  plugin.getSelectionSnapshot = () => ({ text: 'Duplicate', htmlFrom: 'Duplicate at the second location. Final sentence.' });
+  plugin.getSelectedText = () => 'Duplicate';
+  let text; plugin.startTextSession = (value) => { text = value; };
+  await plugin.readFromSelection(); assert.match(text, /^Duplicate at the second location/);
+  plugin.showToolbar(); assert.equal(plugin.dock.host, source.view.containerEl); assert.equal(plugin.dock.outline.hidden, true);
+});
+
+test('audio export requires an online engine and explicit confirmation, with a single modal', () => {
+  const plugin = fixture();
+  plugin.openAudioExport(); assert.equal(plugin.exportModal, undefined);
+  plugin.settings.speechEngine = 'mimo'; plugin.openAudioExport();
+  const modal = plugin.exportModal;
+  assert.equal(modal.busy, false); assert.equal(modal.startButton.disabled, false);
+  assert.ok(modal.contentEl.all().some((el) => el.textContent.includes('synthesized again')));
+  plugin.openAudioExport(); assert.equal(plugin.exportModal, modal);
+  modal.close(); assert.equal(plugin.exportModal, null); assert.deepEqual(modal.texts, []);
 });
 
 test('opening audio parts stay in one queue item and only advance after all finish', async () => {

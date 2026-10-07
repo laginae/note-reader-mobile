@@ -1,10 +1,19 @@
-# Note and PDF Voice Reader Mobile
+# Note and PDF Voice Reader for Mobile
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-A mobile-first Obsidian read-aloud plugin for Markdown notes and text-based PDFs.
+A mobile-first read-aloud companion for Markdown notes, text-based PDFs and local HTML files in Obsidian.
 
-**0.2.5 is a mobile testing release.** Automated checks are included; full Android and iOS device validation remains pending. This is a separate plugin and does not change the desktop edition.
+**0.3.0 is an early mobile release.** An iPhone user has confirmed full-file reading, starting from selected text, pause/resume, Stop, speed adjustment and an unobstructed toolbar in their tested setup. The new outline, footnote, HTML and export workflows still need broader device testing. Complex PDFs may have layout-specific issues. This is a separate plugin and does not change the desktop edition.
+
+## Highlights
+
+- **Read beside your document:** touch-sized controls with pause, Stop, speed and current-audio seeking.
+- **Academic PDF reading:** column-aware text ordering, optional header/footer filtering, and conservative footnote separation, including first-page correspondence blocks.
+- **Read by section:** prefer PDF bookmarks; infer numbered/font-emphasized headings when no usable bookmarks exist. Search an outline and read a section or continue from it.
+- **Local HTML:** open files with HTML Reader, then read the whole file, a selection or from a selected position.
+- **WAV export:** save an online-engine reading range to the vault after explicit confirmation.
+- **Privacy choices:** device speech by default; optional online providers require permission. No developer relay server or built-in telemetry.
 
 ## Install and Start
 
@@ -13,7 +22,7 @@ A mobile-first Obsidian read-aloud plugin for Markdown notes and text-based PDFs
 3. Put the three files in `<vault>/.obsidian/plugins/note-reader-mobile/` using your device file manager or vault sync, then enable the plugin. Do not copy another vault's `data.json` or credentials.
 4. Start with device system speech, or choose an online engine and explicitly enable processing after configuring its secret.
 
-This release is not a community-directory submission. Avoid starting the desktop and mobile plugins at the same time in one vault.
+Community availability depends on Obsidian review; a GitHub release alone does not mean the plugin is listed. Avoid starting the desktop and mobile plugins at the same time in one vault.
 
 ## Current capabilities
 
@@ -31,6 +40,9 @@ On phones, opening the reading bar temporarily keeps the current pane's native t
 - Resume from a privacy-bounded saved position
 - Coordinate-aware single-column, two-column, and mixed-layout PDF ordering
 - Optional local PDF header/footer filtering, enabled by default
+- PDF bookmarks or an inferred outline, section reading and a one-document in-memory outline cache
+- Body-only, original-order or footnotes-only PDF reading
+- Local HTML reading and confirmed WAV export for online speech engines
 - Device system speech with no text sent by the plugin to an online TTS service
 - Optional Xiaomi MiMo, Microsoft Azure Speech, OpenRouter TTS, HTTPS remote CosyVoice and a custom speech API (BYOK)
 - Touch-sized controls, vertical layouts, pause/resume, and chunk navigation
@@ -62,6 +74,24 @@ OpenRouter defaults to Kokoro `bm_george` (UK English male); presets also includ
 
 PDF parsing and reading-order calculation happen locally. Image-only PDFs require OCR before they can be read.
 
+## PDF Sections and Footnotes
+
+On a PDF, tap the outline icon in the toolbar, or choose PDF outline in the expanded player. Select a heading, then Read section or Read from section. Section reading includes its subsections and stops before the next same-level or higher-level heading. Inferred outlines are labeled and may require checking; a bookmark without a reliable text location is labeled as starting at a page boundary.
+
+Reopening the same unchanged PDF uses a single-document memory cache. Refresh explicitly rescans it; file changes or header-filter changes invalidate it. The cache is not written to settings and is cleared on plugin unload. Nothing is written back to the PDF.
+
+Academic > PDF footnote reading defaults to Body only. Smaller bottom-page text with a marker and a separating gap may be identified as a note; uncertain text stays in the body. Choose Original order to retain notes, or Footnotes only to read them separately. The toolbar scope menu also offers Read PDF footnotes only without changing the setting. Selection-only reading preserves the selected text. Notes are separated by page layout, not linked semantically to individual citations.
+
+## Local HTML
+
+Install and enable the **HTML Reader** community plugin to open `.html` or `.htm` files in the vault. Full-file reading parses the saved HTML locally, without executing scripts or loading page resources. For an accessible HTML Reader frame, selected-text and selected-position reading use the actual rendered selection. A reloaded frame or changed file may require selecting again. Script-generated content that is absent from the saved file is not included in full-file reading; external webpages and HTML highlighting are not included.
+
+## Audio Export
+
+Start a reading range with an online engine, expand the player and choose Export reading audio (also available as a command). Confirm the displayed chunk/character count. Export synthesizes that entire range again, not just the remaining audio, so it may incur additional provider charges. Playback is paused; existing service consent still applies.
+
+The result is a normal-speed, mono, 16-bit WAV under `Note Reader Audio/` in the vault. Player speed and volume are not baked into it. No desktop executable is required, no files are overwritten, and exported content may be synchronized by your vault sync service. Close the export window to cancel future requests; already-sent requests and an already-started file write cannot be recalled. System speech cannot be exported. Mobile limits are 30,000 characters and 32 MiB output; choose a shorter selection or section if needed. Oversized/failed synthesis produces no completed export, but requests already sent may still be billed.
+
 ## Remote CosyVoice contract
 
 The configured endpoint must use HTTPS and accept a JSON request:
@@ -81,22 +111,23 @@ It must return MP3 or WAV bytes. If a remote secret is selected, it is sent as a
 
 **PDF headers and footers:** Settings > Academic > Skip PDF headers and footers is on by default. It locally removes short repeated edge lines (such as authors and journal names) and recognizable page numbers, without modifying the PDF. It applies to full-PDF reading, continuing from a selection and resuming; selection-only reading keeps the selected text. Changes take effect on the next reading session.
 
-Filtering is conservative: uncertain edge text, larger titles and numbered headings are retained. When starting partway through a PDF, up to three preceding pages provide local recognition evidence but are not read aloud. Unique headers, unusual margins, rotated pages or missing text coordinates may remain unfiltered; disable the setting if body text is omitted. Footnote separation is not included in the mobile edition.
+Filtering is conservative: uncertain edge text, larger titles and numbered headings are retained. When starting partway through a PDF, up to three preceding pages provide local recognition evidence but are not read aloud. Unique headers, unusual margins, rotated pages or missing text coordinates may remain unfiltered; disable the setting if body text is omitted.
 
-| Capability | Mobile 0.2.5 testing edition | Desktop 0.9.4 |
+| Capability | Mobile 0.3.0 | Desktop 0.9.4 |
 | --- | --- | --- |
 | Markdown and text PDFs | Supported; device testing pending | Supported |
 | MiMo and custom speech APIs | Added; device/provider checks pending | Available |
 | Local executable / Python engines | Not included | Available |
 | Academic text cleanup | Shared-core opt-in algorithms | Available |
 | PDF header/footer filtering | Default-on local heuristic; can be disabled | Available |
-| Highlights and PDF outline/bookmark tools | Not included | Available |
-| HTML, Web viewer, Copilot, audio export | Not included | Available |
+| PDF outline and footnote separation | Added; broader device testing pending | Available |
+| Local HTML and audio export | HTML Reader integration; WAV export from online engines | Available |
+| Highlights, PDF bookmark writing, Web viewer, Copilot | Not included | Available |
 
 - Online synthesis uses normal speed; playback rate is applied locally, avoiding doubled speed or a new paid synthesis merely to change speed. System speech rate/volume changes may apply at the next utterance.
 - The five-second buttons and current-audio slider only seek within the loaded online audio, not future chunks or system speech.
 - PDF extraction finishes before playback; this is not the desktop progressive-PDF implementation. Image-only PDFs need OCR.
-- Highlighting, PDF outline/bookmark editing, HTML/Web viewer/Copilot integration and audio export are not included in this release.
+- Highlighting, PDF bookmark editing and Web viewer/Copilot integration are not included in this release.
 - Reading-order and resume anchors are heuristic. Complex PDFs and changed files may need a new selected starting point.
 - Background/lock-screen playback is not guaranteed. The plugin pauses when the app is hidden.
 - If the device blocks autoplay, tap Resume to play the retained audio; this does not request another synthesis.
@@ -110,7 +141,11 @@ npm test
 
 This repository consumes [`@laginae/note-reader-core`](https://github.com/laginae/note-reader-core). It contains no Node.js, Electron, filesystem, child-process, or local executable calls.
 
-Before community publication, complete the [device checklist](docs/mobile-validation.md) on Android and iOS. Mocked tests do not send notes or charge speech accounts. The source entry point is included so the release bundle can be rebuilt from this repository.
+See the [device checklist](docs/mobile-validation.md) for confirmed and pending coverage. Mocked tests do not send notes or charge speech accounts. The source entry point is included so the release bundle can be rebuilt from this repository.
+
+## Feedback
+
+Report problems in [GitHub Issues](https://github.com/laginae/note-reader-mobile/issues), including plugin/Obsidian/iOS or Android versions, speech engine, steps to reproduce and the relevant reading scope. For PDF issues, screenshots of the reader and the corresponding PDF region are particularly helpful. Redact personal content; attach a minimal PDF only if you have permission to share it. Never include API keys, secrets or `data.json`. Basic iPhone success is not a guarantee for every device or PDF.
 
 ## Related repositories
 

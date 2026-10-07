@@ -4,7 +4,13 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 assert.equal(manifest.isDesktopOnly, false, 'manifest.json must set isDesktopOnly to false');
+assert.equal(manifest.version, pkg.version);
+assert.equal(manifest.version, lock.version);
+assert.equal(manifest.version, lock.packages[''].version);
+assert.match(lock.packages['node_modules/@laginae/note-reader-core'].resolved, /^git\+https:\/\/github\.com\/laginae\/note-reader-core\.git#[a-f0-9]{40}$/);
 
 const files = fs.readdirSync(path.join(root, 'src'))
   .filter((name) => name.endsWith('.js'))

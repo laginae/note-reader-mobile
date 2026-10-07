@@ -1,9 +1,9 @@
 {
   "id": "note-reader-mobile",
-  "name": "Note and PDF Voice Reader Mobile",
-  "version": "0.2.5",
+  "name": "Note and PDF Voice Reader for Mobile",
+  "version": "0.3.0",
   "minAppVersion": "1.11.4",
-  "description": "Privacy-first read aloud for notes and text PDFs using system speech or optional online TTS.",
+  "description": "Read notes, PDFs and local HTML aloud on mobile, with PDF outlines, footnote filtering and WAV export. Use device voices or optional online speech services.",
   "author": "Note and PDF Voice Reader Contributors",
   "authorUrl": "https://github.com/laginae/note-reader-mobile",
   "isDesktopOnly": false
