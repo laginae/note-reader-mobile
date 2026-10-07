@@ -1,6 +1,7 @@
 'use strict';
 
 const { extractPdfTextLayout } = require('@laginae/note-reader-core');
+const { edgeCandidates, recurringEdges, filterPageHeaders } = require('./pdf-headers');
 
 const PDF_MAX_BYTES = 200 * 1024 * 1024;
 const PDF_MAX_PAGES = 2000;
@@ -47,7 +48,31 @@ async function extractPdfPages(app, file, options = {}) {
     const requestedStart = Math.floor(Number(options.startPageNumber) || 1);
     const startPageNumber = Math.max(1, Math.min(totalPages, requestedStart));
     const pages = [];
+    const samples = [];
     let textLength = 0;
+
+    async function readLayout(pageNumber) {
+      let page;
+      try {
+        page = await document.getPage(pageNumber);
+        const content = await page.getTextContent();
+        const viewport = page.getViewport?.({ scale: 1 });
+        const layout = extractPdfTextLayout(content?.items, { viewport });
+        return { layout, pageNumber, text: layout.text, totalPages,
+          edgeCandidates: options.skipHeaders !== false ? edgeCandidates(layout, content?.items, viewport) : [] };
+      } finally { page?.cleanup?.(); }
+    }
+
+    // Bounded local look-behind also recognizes running headers when resuming near the end.
+    if (options.skipHeaders !== false) {
+      for (let number = Math.max(1, startPageNumber - 3); number < startPageNumber; number += 1) {
+        if (options.isCancelled?.()) return [];
+        try {
+          const sample = await readLayout(number);
+          samples.push({ pageNumber: number, edgeCandidates: sample.edgeCandidates });
+        } catch { /* Optional evidence must not prevent reading the requested pages. */ }
+      }
+    }
 
     for (let pageNumber = startPageNumber; pageNumber <= totalPages; pageNumber += 1) {
       if (typeof options.isCancelled === 'function' && options.isCancelled()) {
@@ -57,35 +82,20 @@ async function extractPdfPages(app, file, options = {}) {
         options.onProgress({ pageNumber, totalPages });
       }
 
-      let page = null;
-      try {
-        page = await document.getPage(pageNumber);
-        const textContent = await page.getTextContent();
-        const viewport = typeof page.getViewport === 'function'
-          ? page.getViewport({ scale: 1 })
-          : null;
-        const layout = extractPdfTextLayout(textContent && textContent.items, { viewport });
-        textLength += layout.text.length;
-        if (textLength > PDF_MAX_TEXT_CHARS) {
-          throw new Error('This PDF contains more than 5,000,000 extractable characters. Split it before reading.');
-        }
-        pages.push({
-          layout,
-          pageNumber,
-          text: layout.text,
-          totalPages,
-        });
-      } finally {
-        if (page && typeof page.cleanup === 'function') {
-          page.cleanup();
-        }
+      const page = await readLayout(pageNumber);
+      textLength += page.text.length;
+      if (textLength > PDF_MAX_TEXT_CHARS) {
+        throw new Error('This PDF contains more than 5,000,000 extractable characters. Split it before reading.');
       }
+      pages.push(page);
     }
 
     if (!pages.some((page) => page.text.trim())) {
       throw new Error('No extractable text was found. This PDF may be scanned or image-only; run OCR first.');
     }
-    return pages;
+    if (options.isCancelled?.()) return [];
+    const repeated = recurringEdges([...samples, ...pages]);
+    return options.skipHeaders === false ? pages : pages.map((page) => filterPageHeaders(page, repeated));
   } finally {
     if (document && typeof document.cleanup === 'function') {
       document.cleanup();

@@ -4,7 +4,7 @@
 
 A mobile-first Obsidian read-aloud plugin for Markdown notes and text-based PDFs.
 
-**0.2.4 is a mobile testing release.** Automated checks are included; full Android and iOS device validation remains pending. This is a separate plugin and does not change the desktop edition.
+**0.2.5 is a mobile testing release.** Automated checks are included; full Android and iOS device validation remains pending. This is a separate plugin and does not change the desktop edition.
 
 ## Install and Start
 
@@ -30,6 +30,7 @@ On phones, opening the reading bar temporarily keeps the current pane's native t
 - Read an entire active note or text-based PDF
 - Resume from a privacy-bounded saved position
 - Coordinate-aware single-column, two-column, and mixed-layout PDF ordering
+- Optional local PDF header/footer filtering, enabled by default
 - Device system speech with no text sent by the plugin to an online TTS service
 - Optional Xiaomi MiMo, Microsoft Azure Speech, OpenRouter TTS, HTTPS remote CosyVoice and a custom speech API (BYOK)
 - Touch-sized controls, vertical layouts, pause/resume, and chunk navigation
@@ -78,14 +79,17 @@ It must return MP3 or WAV bytes. If a remote secret is selected, it is sent as a
 
 ## Playback and Limits
 
-PDF column ordering does not include dedicated header/footer filtering or footnote separation in the mobile edition. Page numbers, running author/journal lines and footnotes can still enter the speech text. These desktop features have not yet been ported; selecting body text limits what is read without changing the PDF.
+**PDF headers and footers:** Settings > Academic > Skip PDF headers and footers is on by default. It locally removes short repeated edge lines (such as authors and journal names) and recognizable page numbers, without modifying the PDF. It applies to full-PDF reading, continuing from a selection and resuming; selection-only reading keeps the selected text. Changes take effect on the next reading session.
 
-| Capability | Mobile 0.2.4 testing edition | Desktop 0.9.4 |
+Filtering is conservative: uncertain edge text, larger titles and numbered headings are retained. When starting partway through a PDF, up to three preceding pages provide local recognition evidence but are not read aloud. Unique headers, unusual margins, rotated pages or missing text coordinates may remain unfiltered; disable the setting if body text is omitted. Footnote separation is not included in the mobile edition.
+
+| Capability | Mobile 0.2.5 testing edition | Desktop 0.9.4 |
 | --- | --- | --- |
 | Markdown and text PDFs | Supported; device testing pending | Supported |
 | MiMo and custom speech APIs | Added; device/provider checks pending | Available |
 | Local executable / Python engines | Not included | Available |
 | Academic text cleanup | Shared-core opt-in algorithms | Available |
+| PDF header/footer filtering | Default-on local heuristic; can be disabled | Available |
 | Highlights and PDF outline/bookmark tools | Not included | Available |
 | HTML, Web viewer, Copilot, audio export | Not included | Available |
 

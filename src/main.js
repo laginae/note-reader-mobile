@@ -398,7 +398,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   speechConfigurationKey() {
-    const { speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, ...speech } = this.settings;
+    const { speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, ...speech } = this.settings;
     return JSON.stringify(speech);
   }
 
@@ -888,7 +888,13 @@ class NoteReaderMobilePlugin extends Plugin {
     pages.forEach((page, pageIndex) => {
       let text = page.text;
       if (pageIndex === 0 && context.anchor) {
-        text = sliceTextFromReadingPosition(text, { anchor: context.anchor }).text;
+        const sliced = sliceTextFromReadingPosition(text, { anchor: context.anchor });
+        text = sliced.text;
+        // Preserve an explicitly chosen edge anchor if filtering removed it on the starting page.
+        if (!sliced.matched && page.unfilteredText) {
+          const original = sliceTextFromReadingPosition(page.unfilteredText, { anchor: context.anchor });
+          if (original.matched) text = original.text;
+        }
       }
       const clean = this.prepareText(text);
       chunks.push(...chunker.push(clean, { pageNumber: page.pageNumber }));
@@ -904,6 +910,7 @@ class NoteReaderMobilePlugin extends Plugin {
       const pages = await extractPdfPages(this.app, file, {
         loadPdfJs,
         startPageNumber: context.startPageNumber,
+        skipHeaders: this.settings.pdfSkipHeaders,
         isCancelled: () => operationId !== this.sessionId,
         onProgress: ({ pageNumber, totalPages }) => {
           this.statusDetail = `${ui.extracting} ${pageNumber}/${totalPages}`;
@@ -1570,6 +1577,12 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
     const options = academicOptions(this.plugin.settings);
     const zh = this.plugin.settings.settingsLanguage === 'chinese';
     const label = (en, cn) => zh ? cn : en;
+    new Setting(containerEl).setName(label('Skip PDF headers and footers', '跳过 PDF 页眉页脚'))
+      .setDesc(label('On by default. Locally filters repeated short edge lines and page numbers. Uncertain text, footnotes and selection-only reading are preserved. Applies to the next reading session; disable if body text is omitted.', '默认开启。在本地过滤页边重复短行和页码；不确定的文字、脚注和仅选中文字保留。下次朗读生效；发现正文误删时可关闭。'))
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.pdfSkipHeaders).onChange(async (value) => {
+        this.plugin.settings.pdfSkipHeaders = value;
+        await this.plugin.saveSettings();
+      }));
     for (const [key, name] of [['academicMathMode', label('Formula reading', '公式朗读')], ['academicTableMode', label('Table reading', '表格朗读')]]) {
       new Setting(containerEl).setName(name)
         .setDesc(label('Applies when Strip Markdown is enabled. Smart mode skips complex formulas or long numeric tables. All mode still omits formulas that cannot be parsed safely.', '开启“移除 Markdown 格式”后生效。智能模式跳过复杂公式或较长数字表格；完整模式仍会略过无法可靠解析的公式。'))

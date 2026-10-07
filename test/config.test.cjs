@@ -19,6 +19,12 @@ test('defaults to local system speech and stores no credential value', () => {
   assert.equal(Object.keys(DEFAULT_SETTINGS).some((key) => /apiKey|subscriptionKey/i.test(key)), false);
 });
 
+test('PDF edge filtering defaults on for new and existing settings but can be disabled', () => {
+  assert.equal(DEFAULT_SETTINGS.pdfSkipHeaders, true);
+  assert.equal(normalizeSettings({}).pdfSkipHeaders, true);
+  assert.equal(normalizeSettings({ pdfSkipHeaders: false }).pdfSkipHeaders, false);
+});
+
 test('OpenRouter model changes choose an English male default where the catalog identifies one', () => {
   assert.equal(getDefaultOpenRouterVoice('hexgrad/kokoro-82m'), 'bm_george');
   assert.equal(getDefaultOpenRouterVoice('microsoft/mai-voice-2'), 'en-US-Ethan:MAI-Voice-2');

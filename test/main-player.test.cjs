@@ -416,6 +416,50 @@ const multipartText = 'This first sentence has enough characters to begin. '
   + 'This second sentence also has enough characters for the second opening stage. '
   + 'The remaining sentence still belongs to the same logical chunk.';
 
+test('PDF header filter has bilingual academic settings and changes only the next session', async () => {
+  for (const [settingsLanguage, name] of [['english', 'Skip PDF headers and footers'], ['chinese', '跳过 PDF 页眉页脚']]) {
+    const plugin = fixture({ settingsLanguage });
+    const tab = new loaded.__test.NoteReaderMobileSettingTab(plugin.app, plugin);
+    tab.activeTab = 'academic'; tab.display();
+    const row = tab.containerEl.rows.find((r) => r.name === name);
+    assert.equal(row.input.value, true);
+    const queue = plugin.queue, sessionId = plugin.sessionId;
+    await row.input.change(false);
+    assert.equal(plugin.saved.at(-1).pdfSkipHeaders, false);
+    assert.equal(plugin.queue, queue);
+    assert.equal(plugin.sessionId, sessionId);
+  }
+});
+
+test('PDF selection-only reading bypasses header filtering', async () => {
+  const plugin = fixture({ pdfSkipHeaders: true });
+  sourceFixture(plugin, 'pdf');
+  plugin.getSelectedText = () => 'A. Researcher et al.';
+  plugin.getSelectionSnapshot = () => ({ pageNumber: 2 });
+  let result;
+  plugin.startTextSession = (text, context) => { result = { text, context }; };
+  plugin.readPdf = async () => { throw new Error('Selection must not re-extract the PDF'); };
+  await plugin.readSelection();
+  assert.equal(result.text, 'A. Researcher et al.');
+  assert.equal(result.context.pageNumber, 2);
+});
+
+test('PDF anchors use filtered body or the original first page when an explicit edge anchor was removed', () => {
+  const plugin = fixture({ stripMarkdown: false });
+  const header = 'A. Researcher et al. Journal article.';
+  const body = 'Earlier body sentence. Resume at this body sentence.';
+  const pages = [{ pageNumber: 2, text: body, unfilteredText: `${header}\n${body}` },
+    { pageNumber: 3, text: 'Later filtered body sentence.', unfilteredText: `${header}\nLater filtered body sentence.` }];
+  const content = (anchor) => plugin.buildPdfChunks(pages, { anchor }).map((chunk) => chunk.text).join('\n');
+  const bodyStart = content('Resume at this body sentence.');
+  assert.match(bodyStart, /^Resume at this body sentence/);
+  assert.doesNotMatch(bodyStart, /Researcher|Earlier/);
+  const edgeStart = content(header);
+  assert.ok(edgeStart.startsWith(header));
+  assert.equal(edgeStart.split(header).length - 1, 1);
+  assert.match(edgeStart, /Later filtered body/);
+});
+
 test('opening audio parts stay in one queue item and only advance after all finish', async () => {
   const plugin = fixture({ speechEngine: 'mimo' });
   plugin.queue = createPlaybackQueueState([{ id: 'one', text: multipartText }]);

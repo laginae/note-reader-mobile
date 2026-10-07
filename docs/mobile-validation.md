@@ -1,6 +1,6 @@
 # Mobile Device Validation
 
-Version: 0.2.4. Status: **full Android and iOS device validation pending**. Initial iOS feedback identified panel-exit and selection problems in 0.2.0, bottom-navigation overlap in 0.2.1, and status/header overlap in 0.2.2. The new safe-area/header-flow fix still needs device retesting.
+Version: 0.2.5. Status: **full Android and iOS device validation pending**. Initial iOS feedback identified panel-exit and selection problems in 0.2.0, bottom-navigation overlap in 0.2.1, and status/header overlap in 0.2.2. The new safe-area/header-flow fix still needs device retesting.
 
 Use a public sample note/PDF and a dedicated test key with a small spending cap. Record OS, Obsidian, WebView versions and date. Do not attach keys, private files or device identifiers to issues.
 
@@ -16,6 +16,9 @@ Use a public sample note/PDF and a dedicated test key with a small spending cap.
 - Select text before changing the reading scope or expanding the panel; verify the exact starting position in Markdown preview/editing and PDF views. Switch files or edit the source and confirm old selections are not reused.
 - Check system voice availability and whether the chosen voice works offline. An unavailable voice must not start an online engine automatically.
 - Read selection, continue from selection, full note and single-/two-column PDFs.
+- On a public multi-page PDF, compare full reading with Academic > Skip PDF headers and footers on/off. Repeated author/journal edge lines and page numbers should be skipped when enabled; body, titles and footnotes must not be inadvertently removed. Verify both columns and alternating headers.
+- Continue from a body selection and resume on the last page with filtering enabled. Only the selected/resumed page onward should play. Selection-only reading must preserve selected edge text. Change the setting during playback: current playback stays intact and the next session uses the new value.
+- Check unique headers, rotated pages and unusual margins; conservative retention is expected. Disabling the setting should restore all extracted edge text. The PDF file itself must remain unchanged.
 - Test previous/next, repeated taps, pause during synthesis and playback.
 - Test 0/50/100% volume, 1/1.25/2x speed across segment changes and current-audio seeking.
 - Test background, lock screen, interruptions and foreground return; no automatic new synthesis while hidden.
