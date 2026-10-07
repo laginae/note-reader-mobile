@@ -28,6 +28,32 @@
 .note-reader-mobile-docked-view {
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
+  container-name: note-reader-mobile-pane;
+}
+
+/* Obsidian phone headers are fixed in floating/auto-full-screen mode.
+   Reserve the status area once, then keep the native header in normal flow. */
+.is-mobile.is-phone .workspace-leaf-content.note-reader-mobile-docked-view {
+  --view-top-spacing: 0px;
+  --view-top-spacing-markdown: 8px;
+  --view-top-fade-mask: none;
+  box-sizing: border-box;
+  padding-top: max(8px, var(--safe-area-inset-top, 0px), env(safe-area-inset-top, 0px));
+}
+
+.is-mobile.is-phone .note-reader-mobile-docked-view > .view-header {
+  position: relative;
+  inset: auto;
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding-top: 0;
+  transform: none;
+  opacity: 1;
+}
+
+.is-mobile.is-phone .note-reader-mobile-docked-view > .view-header::after {
+  display: none;
 }
 
 .note-reader-mobile-docked-view > .view-content {
@@ -37,6 +63,8 @@
 }
 
 .note-reader-mobile-dock {
+  --slider-thumb-width: 12px;
+  --slider-thumb-height: 12px;
   flex: 0 0 auto;
   min-width: 0;
   width: 100%;
@@ -44,6 +72,26 @@
   border-bottom: 1px solid var(--background-modifier-border);
   background: var(--background-primary);
   padding: 2px max(8px, env(safe-area-inset-right)) 4px max(8px, env(safe-area-inset-left));
+}
+
+/* Use the pane's width, not the screen's, for iPad Split View and Stage Manager. */
+@container note-reader-mobile-pane (min-width: 680px) {
+  .note-reader-mobile-dock {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.9fr) minmax(320px, 1.4fr);
+    align-items: center;
+    column-gap: 12px;
+  }
+}
+
+@container note-reader-mobile-pane (max-width: 299px) {
+  .note-reader-mobile-dock .note-reader-mobile-dock-controls {
+    grid-template-columns: 44px 44px 44px minmax(0, 1fr);
+  }
+  .note-reader-mobile-dock .note-reader-mobile-dock-timeline {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
 }
 
 .note-reader-mobile-dock-header {
@@ -65,6 +113,12 @@
   min-width: 0;
   min-height: 44px;
   font-size: var(--font-ui-small);
+}
+
+.note-reader-mobile-dock button.note-reader-mobile-icon-button {
+  width: 44px;
+  height: 44px;
+  padding: 8px;
 }
 
 .note-reader-mobile-dock .note-reader-mobile-icon-button,
