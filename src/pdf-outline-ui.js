@@ -21,7 +21,7 @@ class PdfOutlineModal extends Modal {
     this.modalEl.addClass('note-reader-mobile-outline-modal');
     this.contentEl.addClass('note-reader-mobile-outline');
     const header = this.contentEl.createDiv({ cls: 'note-reader-mobile-outline-header' });
-    header.createEl('h2', { text: this.t('PDF 大纲', 'PDF outline') });
+    header.createEl('h2', { text: this.t('文档大纲', 'Document outline') });
     this.refresh = this.button(header, 'refresh-cw', this.t('重新识别', 'Refresh outline'), () => { void this.load(true); }, true);
     this.button(header, 'x', this.t('关闭大纲', 'Close outline'), () => this.close(), true);
     this.contentEl.createDiv({ cls: 'note-reader-mobile-outline-filename', text: this.file.name || this.file.path.split('/').pop() });
@@ -55,7 +55,7 @@ class PdfOutlineModal extends Modal {
       if (cancelled() || !result) return;
       this.data = result.data; this.key = result.key;
       this.status.textContent = this.data.entries.length
-        ? `${this.data.source === 'bookmarks' ? this.t('PDF 自带书签', 'PDF bookmarks') : this.t('自动识别，请核对章节', 'Inferred outline; check sections')} · ${this.data.entries.length}`
+        ? `${this.data.source === 'bookmarks' ? this.t('PDF 自带书签', 'PDF bookmarks') : this.data.source === 'headings' ? this.t('文档标题', 'Document headings') : this.t('自动识别，请核对章节', 'Inferred outline; check sections')} · ${this.data.entries.length}`
         : this.t('未找到可用大纲，可关闭后朗读全文或选中文字。', 'No outline found. Read the file or selected text instead.');
       this.drawList();
     } catch {
@@ -70,16 +70,29 @@ class PdfOutlineModal extends Modal {
     const entries = (this.data?.entries || []).map((entry, index) => ({ entry, index }))
       .filter(({ entry }) => !query || entry.title.toLocaleLowerCase().includes(query));
     for (const { entry, index } of entries.slice(0, this.limit)) {
-      const row = this.list.createEl('button', { cls: 'note-reader-mobile-outline-row' });
+      const group = this.list.createDiv({ cls: 'note-reader-mobile-outline-item' });
+      const row = group.createEl('button', { cls: 'note-reader-mobile-outline-row' });
       row.type = 'button'; row.setAttr('data-level', String(Math.min(4, entry.level)));
       row.createSpan({ cls: 'note-reader-mobile-outline-title', text: entry.title });
-      row.createSpan({ cls: 'note-reader-mobile-outline-page', text: `${this.t('第', 'p. ')}${entry.page}${this.t('页', '')}` });
-      row.addEventListener('click', () => { this.selected = index; this.updateSelection(); });
-      this.rows.push({ row, index });
+      row.setAttr('aria-label', `${this.t('定位', 'Go to')} ${entry.title}`);
+      if (entry.page) row.createSpan({ cls: 'note-reader-mobile-outline-page', text: `${this.t('第', 'p. ')}${entry.page}${this.t('页', '')}` });
+      row.addEventListener('click', () => { void this.locate(index); });
+      const select = this.button(group, 'list-start', this.t('选择朗读范围', 'Select reading range'), () => { this.selected = index; this.updateSelection(); }, true);
+      this.rows.push({ row, select, index });
     }
     if (this.data?.entries.length && !entries.length) this.list.createEl('p', { text: this.t('没有匹配的章节', 'No matching sections') });
     this.more.hidden = entries.length <= this.limit;
     this.updateSelection();
+  }
+  async locate(index) {
+    if (!this.data || this.closed || this.locating) return;
+    this.locating = true;
+    try {
+      await this.plugin.locateOutlineEntry(this.file, this.key, this.data, index);
+      if (!this.closed) this.close();
+    } catch {
+      if (!this.closed) this.status.textContent = this.t('无法定位标题，请确认原文视图已打开且文件未改变。', 'Could not locate the heading. Open the unchanged source document and try again.');
+    } finally { this.locating = false; }
   }
   updateSelection() {
     const entry = this.data?.entries[this.selected];

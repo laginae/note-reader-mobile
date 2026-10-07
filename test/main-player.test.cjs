@@ -96,6 +96,42 @@ function sourceFixture(plugin, extension = 'md') {
   return leaf;
 }
 
+test('Markdown outline loads, locates without starting playback, and reads only the selected section', async () => {
+  const plugin = fixture(); const leaf = sourceFixture(plugin);
+  plugin.app.vault.cachedRead = async () => '# One\nfirst\n# Two\nsecond';
+  let position; leaf.view.editor = { scrollIntoView: (range) => { position = range; } };
+  const cached = await plugin.loadPdfOutline(leaf.view.file, () => false, () => {});
+  const queue = plugin.queue;
+  await plugin.locateOutlineEntry(leaf.view.file, cached.key, cached.data, 1);
+  assert.equal(position.from.line, 2); assert.equal(plugin.queue, queue);
+  let text; plugin.startTextSession = (value) => { text = value; };
+  plugin.readPdfSection(leaf.view.file, cached.key, cached.data, 0, false);
+  assert.equal(text, '# One\nfirst\n');
+});
+
+test('PDF navigation uses page coordinates when available and a page link otherwise', async () => {
+  const plugin = fixture(); const leaf = sourceFixture(plugin, 'pdf');
+  const { outlineKey } = require('../src/pdf-outline');
+  const key = outlineKey(leaf.view.file, plugin.settings.pdfSkipHeaders);
+  const data = { entries: [{ page: 2, offset: 0 }], pages: [{ pageNumber: 2, layout: { lines: [{ offset: 0, y: 500, xMin: 40 }] } }] };
+  let destination; leaf.view.viewer = { child: { pdfViewer: { scrollPageIntoView: (v) => { destination = v; } } } };
+  await plugin.locateOutlineEntry(leaf.view.file, key, data, 0);
+  assert.equal(destination.pageNumber, 2); assert.equal(destination.destArray[3], 500);
+  leaf.view.viewer = null; let link; plugin.app.workspace.openLinkText = async (v) => { link = v; };
+  await plugin.locateOutlineEntry(leaf.view.file, key, data, 0);
+  assert.equal(link, 'public-example.pdf#page=2');
+});
+
+test('HTML navigation locates the selected duplicate heading without starting speech', async () => {
+  const plugin = fixture(); const leaf = sourceFixture(plugin, 'html');
+  plugin.app.vault.cachedRead = async () => '<h1>Same</h1><p>first</p><h1>Same</h1><p>second</p>';
+  let located = -1;
+  leaf.view.mainView = { iframe: { contentDocument: { body: { localName: 'body', childNodes: [0, 1].map((n) => ({ nodeType: 1, localName: 'h1', getAttribute: () => null, textContent: 'Same', childNodes: [{ nodeType: 3, nodeValue: 'Same' }], scrollIntoView: () => { located = n; } })) } } } };
+  const result = await plugin.loadPdfOutline(leaf.view.file, () => false, () => {});
+  await plugin.locateOutlineEntry(leaf.view.file, result.key, result.data, 1);
+  assert.equal(located, 1);
+});
+
 test('toolbar stays inside the source view, survives refresh, and closes without leaving audio running', async () => {
   const plugin = fixture({ speechEngine: 'mimo' });
   const source = sourceFixture(plugin);
@@ -523,7 +559,7 @@ test('outline UI binds selected section indices after filtering and does not res
   plugin.openPdfOutline(); const modal = plugin.outlineModal;
   await new Promise((resolve) => setImmediate(resolve));
   modal.search.value = 'Methods'; modal.search.events.input();
-  assert.equal(modal.rows.length, 1); modal.rows[0].row.events.click();
+  assert.equal(modal.rows.length, 1); modal.rows[0].select.events.click();
   assert.equal(modal.readSection.disabled, false); modal.readRemaining.events.click();
   assert.equal(read[3], 1); assert.equal(read[4], true); assert.equal(loads, 1); assert.equal(modal.closed, true);
 });
@@ -547,7 +583,7 @@ test('HTML rendered selection uses its exact remaining text and the toolbar supp
   plugin.getSelectedText = () => 'Duplicate';
   let text; plugin.startTextSession = (value) => { text = value; };
   await plugin.readFromSelection(); assert.match(text, /^Duplicate at the second location/);
-  plugin.showToolbar(); assert.equal(plugin.dock.host, source.view.containerEl); assert.equal(plugin.dock.outline.hidden, true);
+  plugin.showToolbar(); assert.equal(plugin.dock.host, source.view.containerEl); assert.equal(plugin.dock.outline.hidden, false);
 });
 
 test('audio export requires an online engine and explicit confirmation, with a single modal', () => {

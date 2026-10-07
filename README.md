@@ -4,13 +4,14 @@
 
 A mobile-first read-aloud companion for Markdown notes, text-based PDFs and local HTML files in Obsidian.
 
-**0.3.0 is an early mobile release.** An iPhone user has confirmed full-file reading, starting from selected text, pause/resume, Stop, speed adjustment and an unobstructed toolbar in their tested setup. The new outline, footnote, HTML and export workflows still need broader device testing. Complex PDFs may have layout-specific issues. This is a separate plugin and does not change the desktop edition.
+**0.3.1 is an early mobile release.** An iPhone user has confirmed full-file reading, starting from selected text, pause/resume, Stop, speed adjustment and an unobstructed toolbar in their tested setup. The new outline, footnote, HTML and export workflows still need broader device testing. Complex PDFs may have layout-specific issues. This is a separate plugin and does not change the desktop edition.
 
 ## Highlights
 
 - **Read beside your document:** touch-sized controls with pause, Stop, speed and current-audio seeking.
 - **Academic PDF reading:** column-aware text ordering, optional header/footer filtering, and conservative footnote separation, including first-page correspondence blocks.
-- **Read by section:** prefer PDF bookmarks; infer numbered/font-emphasized headings when no usable bookmarks exist. Search an outline and read a section or continue from it.
+- **Document outlines:** navigate Markdown headings, HTML h1-h6 headings and PDF bookmarks/inferred headings. Clicking a title locates the source without starting speech. The adjacent range button selects a section for Read section or Read from section.
+- **Sentence-first chunks:** move a complete sentence to the next chunk when it cannot fit; split only oversized sentences at clause/word boundaries within the provider cap. Conservatively join PDF cross-page continuations.
 - **Local HTML:** open files with HTML Reader, then read the whole file, a selection or from a selected position.
 - **WAV export:** save an online-engine reading range to the vault after explicit confirmation.
 - **Privacy choices:** device speech by default; optional online providers require permission. No developer relay server or built-in telemetry.
@@ -76,7 +77,7 @@ PDF parsing and reading-order calculation happen locally. Image-only PDFs requir
 
 ## PDF Sections and Footnotes
 
-On a PDF, tap the outline icon in the toolbar, or choose PDF outline in the expanded player. Select a heading, then Read section or Read from section. Section reading includes its subsections and stops before the next same-level or higher-level heading. Inferred outlines are labeled and may require checking; a bookmark without a reliable text location is labeled as starting at a page boundary.
+On Markdown, local HTML or PDF files, tap the outline icon or choose Document outline in the expanded player. Tap a title to locate the source and close the outline without changing playback. The adjacent range icon selects a section for Read section or Read from section. Section reading includes its subsections and stops before the next same-level or higher-level heading. HTML uses h1-h6 headings and needs HTML Reader for navigation. PDF bookmarks take priority over inference; unsupported exact navigation falls back to the page with a notice. Unresolved HTML navigation keeps the panel open rather than guessing a location.
 
 Reopening the same unchanged PDF uses a single-document memory cache. Refresh explicitly rescans it; file changes or header-filter changes invalidate it. The cache is not written to settings and is cleared on plugin unload. Nothing is written back to the PDF.
 
@@ -113,7 +114,7 @@ It must return MP3 or WAV bytes. If a remote secret is selected, it is sent as a
 
 Filtering is conservative: uncertain edge text, larger titles and numbered headings are retained. When starting partway through a PDF, up to three preceding pages provide local recognition evidence but are not read aloud. Unique headers, unusual margins, rotated pages or missing text coordinates may remain unfiltered; disable the setting if body text is omitted.
 
-| Capability | Mobile 0.3.0 | Desktop 0.9.4 |
+| Capability | Mobile 0.3.1 | Desktop 0.9.4 |
 | --- | --- | --- |
 | Markdown and text PDFs | Supported; device testing pending | Supported |
 | MiMo and custom speech APIs | Added; device/provider checks pending | Available |

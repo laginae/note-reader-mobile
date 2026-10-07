@@ -480,3 +480,10 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.note-reader-mobile-outline-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 4px;
+  align-items: center;
+}
+.note-reader-mobile-outline-item > button { min-width: 0; min-height: 44px; }

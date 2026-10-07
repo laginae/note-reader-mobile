@@ -1,6 +1,6 @@
 {
   "name": "note-reader-mobile",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Mobile-first note, PDF and local HTML voice reader with academic reading tools and WAV export.",
   "license": "MIT",

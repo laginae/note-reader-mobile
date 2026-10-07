@@ -32,7 +32,7 @@ function tableSummary(root, options) {
     ? [caption.trim(), omission('table', options, values.flat().join(' '))].filter(Boolean).join('\n') : null;
 }
 function extractHtmlTree(root, range = null, options = {}) {
-  const pieces = [], stack = [{ node: root }]; let count = 0, length = 0, start = null, end = null;
+  const pieces = [], headings = [], stack = [{ node: root }]; let count = 0, length = 0, start = null, end = null;
   const append = (text) => { length += text.length; if (length > MAX_HTML_TEXT) throw new Error('HTML text limit exceeded.'); pieces.push(text); };
   const mark = (node, offset) => {
     if (range?.startContainer === node && range.startOffset === offset) start = length;
@@ -41,7 +41,7 @@ function extractHtmlTree(root, range = null, options = {}) {
   while (stack.length) {
     const action = stack.pop();
     if (action.boundary !== undefined) { mark(action.node, action.boundary); continue; }
-    if (action.close) { if (BLOCK.has(action.tag)) append('\n'); if (['td', 'th'].includes(action.tag)) append('; '); continue; }
+    if (action.close) { if (action.heading) action.heading.end = length; if (BLOCK.has(action.tag)) append('\n'); if (['td', 'th'].includes(action.tag)) append('; '); continue; }
     if (++count > MAX_HTML_NODES) throw new Error('HTML element limit exceeded.');
     const data = info(action.node);
     if (data.omit) continue;
@@ -56,11 +56,17 @@ function extractHtmlTree(root, range = null, options = {}) {
       append(text); continue;
     }
     if (BLOCK.has(data.tag) || data.tag === 'br') append('\n');
-    stack.push({ close: true, tag: data.tag }); stack.push({ node: action.node, boundary: data.children.length });
+    const heading = /^h[1-6]$/.test(data.tag) && headings.length < 2000 ? { start: length, level: Number(data.tag[1]), element: action.node.nodeType === 1 ? action.node : undefined, id: action.node.getAttribute?.('id') || action.node.attribs?.id || '' } : null;
+    if (heading) headings.push(heading);
+    stack.push({ close: true, tag: data.tag, heading }); stack.push({ node: action.node, boundary: data.children.length });
     for (let i = data.children.length - 1; i >= 0; i--) { stack.push({ node: data.children[i] }); stack.push({ node: action.node, boundary: i }); }
   }
   const raw = pieces.join(''), text = whitespace(raw);
-  return { text, selected: start !== null && end > start ? whitespace(raw.slice(start, end)) : '',
+  return { text, headings: headings.map((h) => {
+    const title = whitespace(raw.slice(h.start, h.end));
+    const offset = text.indexOf(title, whitespace(raw.slice(0, h.start)).length);
+    return { title, level: h.level, id: h.id, offset, ...(h.element ? { element: h.element } : {}) };
+  }).filter((h) => h.title && h.offset >= 0), selected: start !== null && end > start ? whitespace(raw.slice(start, end)) : '',
     fromSelection: start !== null && end > start ? whitespace(raw.slice(start)) : '' };
 }
 function extractHtmlText(source, options = {}) {

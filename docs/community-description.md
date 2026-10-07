@@ -6,7 +6,13 @@ Listen to Markdown notes, text-based PDFs and local HTML files without leaving y
 
 The compact document toolbar provides pause/resume, Stop, previous/next chunk, playback speed and seeking within loaded online audio. Start with the full file, selected text, a selected position or a saved reading position. Expand the player for additional controls and audio export.
 
-## Academic PDFs
+## Document outlines and sentence-first reading
+
+Navigate Markdown headings, HTML h1-h6 headings and PDF bookmarks or inferred headings. Clicking a title locates the source without starting speech; the adjacent range button selects Read section or Read from section. Section reading includes child headings. PDF navigation falls back to the corresponding page with a notice when exact positioning is unavailable. Local HTML navigation requires HTML Reader.
+
+Complete sentences are moved to the next audio chunk instead of split to fill the current one. Sentences that exceed the provider cap still require clause/word splitting; MiMo keeps a 200-character safety cap. Cross-page PDF sentence continuations are joined conservatively.
+
+## Academic PDF tools
 
 - Coordinate-aware single- and two-column reading order.
 - Default-on, optional filtering of recurring headers, footers and page numbers.

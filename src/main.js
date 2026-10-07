@@ -12,7 +12,6 @@ const {
   setIcon,
 } = require('obsidian');
 const {
-  createIncrementalSpeechChunker,
   createPlaybackQueueState,
   createReadingAnchor,
   getCurrentPlaybackItem,
@@ -23,9 +22,9 @@ const {
   sanitizeAcademicTextForSpeech,
   splitOpeningAudioParts,
   sliceTextFromReadingPosition,
-  splitTextForSpeechChunks,
   upsertReadingPosition,
 } = require('@laginae/note-reader-core');
+const { createIncrementalSpeechChunker, splitTextForSpeechChunks } = require('./sentence-chunker');
 const {
   DEFAULT_SETTINGS,
   MICROSOFT_VOICES,
@@ -39,8 +38,9 @@ const {
 const { extractPdfPages, extractPdfDocument } = require('./pdf-extractor');
 const { buildPdfOutline, sectionPages, outlineKey } = require('./pdf-outline');
 const { PdfOutlineModal } = require('./pdf-outline-ui');
+const { markdownOutline, htmlOutline, sectionText } = require('./document-outline');
 const { normalizeFootnoteMode, splitFootnotesInRange } = require('./pdf-footnotes');
-const { MAX_HTML_BYTES, isHtmlFile, extractHtmlText, htmlReaderDocument, captureHtmlSelection } = require('./html-text');
+const { MAX_HTML_BYTES, isHtmlFile, extractHtmlText, extractHtmlTree, htmlReaderDocument, captureHtmlSelection } = require('./html-text');
 const { AudioExportModal } = require('./audio-export-ui');
 const { synthesizeOnlineChunk } = require('./speech-services');
 const { BYOK_PROVIDERS, updateByokProfile, hasByokConsent, grantByokConsent, getByokConfigurationError } = require('./byok');
@@ -57,7 +57,7 @@ const UI = {
     backToText: 'Back to document',
     closeReader: 'Stop and close reader',
     readingScope: 'Reading scope',
-    pdfOutline: 'PDF outline',
+    pdfOutline: 'Document outline',
     exportAudio: 'Export reading audio',
     exportUnavailable: 'Start a reading range with an online engine first. Device system speech cannot be exported.',
     readFootnotes: 'Read PDF footnotes only',
@@ -153,7 +153,7 @@ const UI = {
     backToText: '返回正文',
     closeReader: '停止并关闭朗读器',
     readingScope: '朗读范围',
-    pdfOutline: 'PDF 大纲',
+    pdfOutline: '文档大纲',
     exportAudio: '导出朗读音频',
     exportUnavailable: '请先使用在线引擎开始一个朗读范围。设备系统语音不支持导出。',
     readFootnotes: '只读 PDF 脚注',
@@ -593,8 +593,9 @@ class NoteReaderMobilePlugin extends Plugin {
     if (!refs) return;
     const ui = getUi(this.settings);
     const isPdf = String(this.getSourceLeaf()?.view.file?.extension).toLowerCase() === 'pdf';
-    refs.outline.hidden = !isPdf;
-    refs.header.toggleClass('has-pdf-outline', isPdf);
+    const hasOutline = ['pdf', 'md', 'markdown', 'html', 'htm'].includes(String(this.getActiveFile()?.extension).toLowerCase());
+    refs.outline.hidden = !hasOutline;
+    refs.header.toggleClass('has-pdf-outline', hasOutline);
     const footnotesOption = Array.from(refs.scope.children).find((child) => child.value === 'footnotes');
     footnotesOption.hidden = footnotesOption.disabled = !isPdf;
     if (!isPdf && refs.scope.value === 'footnotes') { refs.scope.value = 'file'; this.readingScope = 'file'; }
@@ -726,7 +727,8 @@ class NoteReaderMobilePlugin extends Plugin {
 
   updatePlayer(refs) {
     const { ui } = refs;
-    refs.outline.hidden = refs.footnotes.hidden = String(this.getSourceLeaf()?.view.file?.extension).toLowerCase() !== 'pdf';
+    refs.footnotes.hidden = String(this.getSourceLeaf()?.view.file?.extension).toLowerCase() !== 'pdf';
+    refs.outline.hidden = !['pdf', 'md', 'markdown', 'html', 'htm'].includes(String(this.getActiveFile()?.extension).toLowerCase());
     refs.exportAudio.disabled = this.settings.speechEngine === 'system' || !this.queue.items.length;
     const phase = this.pauseRequested ? 'paused' : this.phaseOverride || this.queue.status;
     refs.phaseEl.textContent = this.pauseRequested ? (this.playbackBlocked ? ui.audioBlocked : ui.paused) : this.statusDetail || ui[phase] || ui.idle;
@@ -975,7 +977,7 @@ class NoteReaderMobilePlugin extends Plugin {
 
   openPdfOutline() {
     const file = this.getActiveFile();
-    if (String(file?.extension).toLowerCase() !== 'pdf') { new Notice(getUi(this.settings).noFile); return; }
+    if (!['pdf', 'md', 'markdown', 'html', 'htm'].includes(String(file?.extension).toLowerCase())) { new Notice(getUi(this.settings).noFile); return; }
     if (this.outlineModal?.file === file && !this.outlineModal.closed) return;
     this.outlineModal?.close();
     this.outlineModal = new PdfOutlineModal(this, file);
@@ -983,10 +985,17 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   async loadPdfOutline(file, isCancelled, onProgress, force = false) {
-    const key = outlineKey(file, this.settings.pdfSkipHeaders);
+    const key = this.documentOutlineKey(file);
     if (!force && this.pdfOutlineCache?.key === key) return this.pdfOutlineCache;
     // Retain only one parsed PDF in memory; never put document text in settings.
     this.pdfOutlineCache = null;
+    if (String(file.extension).toLowerCase() !== 'pdf') {
+      const source = await this.app.vault.cachedRead(file);
+      if (isCancelled()) return null;
+      if (!this.isOutlineCurrent(file, key)) throw new Error('Document changed.');
+      const data = isHtmlFile(file) ? htmlOutline(source, this.settings.stripMarkdown ? academicOptions(this.settings) : {}) : markdownOutline(source, this.app.metadataCache?.getFileCache(file)?.headings);
+      return (this.pdfOutlineCache = { path: file.path, key, data });
+    }
     const result = await extractPdfDocument(this.app, file, {
       loadPdfJs, includeOutline: true, skipHeaders: this.settings.pdfSkipHeaders, isCancelled, onProgress,
     });
@@ -998,16 +1007,61 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   isOutlineCurrent(file, key) {
-    return outlineKey(file, this.settings.pdfSkipHeaders) === key
+    return this.documentOutlineKey(file) === key
       && (!this.app.vault.getAbstractFileByPath || this.app.vault.getAbstractFileByPath(file.path) === file);
+  }
+
+  documentOutlineKey(file) {
+    const key = outlineKey(file, this.settings.pdfSkipHeaders);
+    return isHtmlFile(file) ? JSON.stringify([key, this.settings.stripMarkdown, academicOptions(this.settings)]) : key;
   }
 
   readPdfSection(file, key, data, index, remaining) {
     if (!this.isOutlineCurrent(file, key) || this.getActiveFile() !== file) throw new Error('PDF or settings changed.');
+    if (data.kind) {
+      this.startTextSession(sectionText(data, index, remaining), { file, kind: 'markdown', sourceLabel: data.entries[index].title });
+      return;
+    }
     const pages = sectionPages(data, index, remaining);
     const chunks = this.buildPdfChunks(pages, {});
     if (!chunks.length) throw new Error('No readable text in the section.');
     this.startPreparedChunks(chunks, { file, kind: 'pdf', sourceLabel: data.entries[index].title });
+  }
+
+  async locateOutlineEntry(file, key, data, index) {
+    if (!this.isOutlineCurrent(file, key)) throw new Error('Document changed.');
+    const leaf = this.getSourceLeaf(), entry = data.entries[index];
+    if (!entry || leaf?.view.file !== file) throw new Error('Open the source document first.');
+    const view = leaf.view;
+    await this.app.workspace.revealLeaf(leaf);
+    if (data.kind === 'html') {
+      const doc = htmlReaderDocument(view);
+      const headings = doc?.body ? extractHtmlTree(doc.body).headings.map((h) => h.element).filter(Boolean) : [];
+      const matches = headings.filter((el) => el.textContent.replace(/\s+/g, ' ').trim() === entry.title.replace(/\s+/g, ' ').trim());
+      const occurrence = data.entries.slice(0, index).filter((h) => h.title === entry.title).length;
+      const target = (entry.id && doc?.getElementById(entry.id)) || matches[occurrence];
+      if (!target) throw new Error('HTML heading unavailable.');
+      target.scrollIntoView({ block: 'start', behavior: 'auto' }); return;
+    }
+    if (data.kind === 'markdown') {
+      if (view.getMode?.() !== 'preview' && view.editor?.scrollIntoView) {
+        view.editor.scrollIntoView({ from: { line: entry.line, ch: 0 }, to: { line: entry.line, ch: 0 } }, true); return;
+      }
+      if (leaf.setEphemeralState) { leaf.setEphemeralState({ line: entry.line }); return; }
+      await this.app.workspace.openLinkText(`${file.path}#${entry.title}`, file.path, false); return;
+    }
+    const child = view.viewer?.child || view.pdfViewer?.child;
+    const viewer = child?.pdfViewer || child?.pdfViewerApplication?.pdfViewer;
+    const page = data.pages.find((p) => p.pageNumber === entry.page);
+    const line = page?.layout.lines.find((l) => l.offset === entry.offset);
+    if (viewer?.scrollPageIntoView) {
+      const y = entry.y ?? line?.y, x = entry.x ?? line?.xMin;
+      viewer.scrollPageIntoView({ pageNumber: entry.page, ...(Number.isFinite(y) ? { destArray: [null, { name: 'XYZ' }, x || 0, y, null] } : {}) });
+      if (!Number.isFinite(y)) new Notice(this.settings.settingsLanguage === 'chinese' ? '已定位到对应页。' : 'Located the page.');
+      return;
+    }
+    await this.app.workspace.openLinkText(`${file.path}#page=${entry.page}`, file.path, false);
+    new Notice(this.settings.settingsLanguage === 'chinese' ? '已按页定位；当前视图不支持精确标题定位。' : 'Located by page; exact heading navigation is unavailable in this view.');
   }
 
   async readFootnotes() {
