@@ -517,6 +517,11 @@ class NoteReaderMobilePlugin extends Plugin {
     const ui = getUi(this.settings);
     host.addClass('note-reader-mobile-docked-view');
     const root = host.createDiv({ cls: 'note-reader-mobile-dock' });
+    // Keep controls above the scrollable document, away from iOS floating navigation.
+    let content = leaf.view.contentEl;
+    while (content?.parentElement && content.parentElement !== host) content = content.parentElement;
+    if (content?.parentElement === host) host.insertBefore(root, content);
+    else host.insertBefore(root, host.firstElementChild);
     root.setAttr('role', 'region'); root.setAttr('aria-label', ui.toolbar);
     root.addEventListener('pointerdown', () => this.captureSelection(), true);
     const header = root.createDiv({ cls: 'note-reader-mobile-dock-header' });

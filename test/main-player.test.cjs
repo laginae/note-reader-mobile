@@ -8,6 +8,14 @@ const { grantByokConsent, normalizeByokProfile } = require('../src/byok');
 class Element {
   constructor(tag = 'div', options = {}) { this.tagName = tag.toUpperCase(); this.textContent = options.text || ''; this.className = options.cls || ''; this.children = []; this.events = {}; this.attrs = {}; }
   createEl(tag, options) { const el = new Element(tag, options); el.parentElement = this; this.children.push(el); return el; }
+  insertBefore(el, before) {
+    if (el === before) return el;
+    if (el.parentElement) el.parentElement.children = el.parentElement.children.filter((child) => child !== el);
+    const index = this.children.indexOf(before);
+    this.children.splice(index < 0 ? this.children.length : index, 0, el);
+    el.parentElement = this;
+    return el;
+  }
   get isConnected() { return !this.removed; }
   remove() { this.removed = true; if (this.parentElement) this.parentElement.children = this.parentElement.children.filter((el) => el !== this); }
   contains(node) { return this.all().includes(node); }
@@ -76,6 +84,7 @@ function fixture(overrides = {}) {
 
 function sourceFixture(plugin, extension = 'md') {
   const containerEl = new Element();
+  containerEl.createDiv({ cls: 'view-header' });
   const contentEl = containerEl.createDiv();
   const file = { path: `public-example.${extension}`, extension, stat: { mtime: 1 } };
   const leaf = { view: { file, containerEl, contentEl, getViewType: () => extension === 'pdf' ? 'pdf' : 'markdown' } };
@@ -91,6 +100,9 @@ test('toolbar stays inside the source view, survives refresh, and closes without
   plugin.showToolbar();
   const dock = plugin.dock;
   assert.equal(dock.root.parentElement, source.view.containerEl);
+  assert.equal(source.view.containerEl.children[0].className, 'view-header');
+  assert.equal(source.view.containerEl.children[1], dock.root);
+  assert.equal(source.view.containerEl.children[2], source.view.contentEl);
   assert.equal(plugin.app.workspace.activeLeaf, source);
   dock.seek.value = '12'; dock.seek.events.input();
   plugin.renderViews();
@@ -206,6 +218,24 @@ test('toolbar follows file tabs without duplicating and system speech disables s
   assert.equal(old.root.removed, true);
   assert.equal(plugin.dock.host, next.view.containerEl);
   assert.equal(next.view.containerEl.children.filter((el) => el.className === 'note-reader-mobile-dock').length, 1);
+});
+
+test('toolbar sits above PDF wrappers, remains above content after refresh and removes only its own layout class', async () => {
+  const plugin = fixture();
+  const leaf = sourceFixture(plugin, 'pdf');
+  const wrapper = leaf.view.contentEl;
+  leaf.view.contentEl = wrapper.createDiv({ cls: 'pdf-container' });
+  leaf.view.containerEl.addClass('existing-theme-class');
+  plugin.showToolbar();
+  const root = plugin.dock.root;
+  assert.deepEqual(leaf.view.containerEl.children.slice(1), [root, wrapper]);
+  plugin.renderViews();
+  assert.equal(plugin.dock.root, root);
+  assert.deepEqual(leaf.view.containerEl.children.slice(1), [root, wrapper]);
+  await plugin.closeReader();
+  assert.equal(leaf.view.containerEl.children[1], wrapper);
+  assert.ok(leaf.view.containerEl.className.includes('existing-theme-class'));
+  assert.ok(!leaf.view.containerEl.className.includes('note-reader-mobile-docked-view'));
 });
 
 test('speed and volume update active audio immediately and persist without cancelling', async () => {

@@ -24,7 +24,7 @@
   overflow-wrap: anywhere;
 }
 
-/* A normal-flow sibling of the document, not an overlay over text or the keyboard. */
+/* Reserve space above the document; do not overlap iOS floating bottom navigation. */
 .note-reader-mobile-docked-view {
   display: flex;
   flex-direction: column;
@@ -41,9 +41,9 @@
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  border-top: 1px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--background-modifier-border);
   background: var(--background-primary);
-  padding: 2px 8px max(4px, env(safe-area-inset-bottom));
+  padding: 2px max(8px, env(safe-area-inset-right)) 4px max(8px, env(safe-area-inset-left));
 }
 
 .note-reader-mobile-dock-header {
