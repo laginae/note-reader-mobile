@@ -47,6 +47,11 @@ const SPEED_PRESETS = [1, 1.25, 1.5, 2];
 const UI = {
   english: {
     title: 'Note Reader Mobile',
+    toolbar: 'Reading toolbar',
+    openPanel: 'Expand player',
+    backToText: 'Back to document',
+    closeReader: 'Stop and close reader',
+    readingScope: 'Reading scope',
     idle: 'Ready',
     extracting: 'Extracting PDF locally',
     synthesizing: 'Synthesizing current chunk',
@@ -133,6 +138,11 @@ const UI = {
   },
   chinese: {
     title: '移动朗读器',
+    toolbar: '朗读工具栏',
+    openPanel: '展开播放器',
+    backToText: '返回正文',
+    closeReader: '停止并关闭朗读器',
+    readingScope: '朗读范围',
     idle: '已就绪',
     extracting: '正在本地解析 PDF',
     synthesizing: '正在合成当前分段',
@@ -323,8 +333,10 @@ class NoteReaderMobilePlugin extends Plugin {
     this.lastSpeechConfiguration = this.speechConfigurationKey();
 
     this.registerView(VIEW_TYPE, (leaf) => new NoteReaderMobileView(leaf, this));
-    this.addRibbonIcon('audio-lines', 'Open Note Reader Mobile', () => this.activateView());
-    this.addCommand({ id: 'open-reader', name: 'Open mobile reader', callback: () => this.activateView() });
+    this.addRibbonIcon('audio-lines', getUi(this.settings).toolbar, () => this.showToolbar());
+    this.addCommand({ id: 'open-reader', name: 'Show reading toolbar', callback: () => this.showToolbar() });
+    this.addCommand({ id: 'open-reader-panel', name: 'Expand reader panel', callback: () => this.runSafely(() => this.activateView()) });
+    this.addCommand({ id: 'close-reader', name: 'Stop and close reader', callback: () => this.runSafely(() => this.closeReader()) });
     this.addCommand({ id: 'read-selection', name: 'Read selected text', callback: () => this.runSafely(() => this.readSelection()) });
     this.addCommand({ id: 'read-from-selection', name: 'Continue reading from selection', callback: () => this.runSafely(() => this.readFromSelection()) });
     this.addCommand({ id: 'read-file', name: 'Read active note or PDF', callback: () => this.runSafely(() => this.readFile()) });
@@ -332,6 +344,19 @@ class NoteReaderMobilePlugin extends Plugin {
     this.addCommand({ id: 'toggle-pause', name: 'Pause or resume reading', callback: () => this.togglePause() });
     this.addCommand({ id: 'stop-reading', name: 'Stop reading', callback: () => this.stopReading() });
     this.addSettingTab(new NoteReaderMobileSettingTab(this.app, this));
+    this.registerEvent(this.app.workspace.on('active-leaf-change', () => this.syncToolbar()));
+    this.registerEvent(this.app.workspace.on('layout-change', () => this.syncToolbar()));
+    this.registerEvent(this.app.workspace.on('editor-change', (_editor, view) => {
+      if (this.selectionSnapshot?.filePath === view?.file?.path) this.selectionSnapshot = null;
+    }));
+    this.registerEvent(this.app.vault.on('modify', (file) => {
+      if (this.selectionSnapshot?.filePath === file.path) this.selectionSnapshot = null;
+    }));
+    this.registerDomEvent(document, 'selectionchange', () => this.captureSelection());
+    this.registerDomEvent(document, 'pointerdown', (event) => {
+      const source = this.getSourceLeaf();
+      if (source?.view?.contentEl?.contains(event.target)) this.selectionSnapshot = null;
+    });
 
     this.registerDomEvent(document, 'keydown', (event) => {
       if (isTextInputTarget(event.target) || event.altKey || event.ctrlKey || event.metaKey || event.repeat
@@ -357,6 +382,9 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   onunload() {
+    this.toolbarEnabled = false;
+    this.removeToolbar();
+    this.selectionSnapshot = null;
     this.stopReading({ quiet: true });
   }
 
@@ -396,6 +424,9 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   async activateView() {
+    this.captureSelection();
+    const source = this.getSourceLeaf();
+    if (source) this.sourceLeaf = source;
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
     const leaf = leaves[0]
       || (this.app.workspace.getLeaf ? this.app.workspace.getLeaf(true) : this.app.workspace.getRightLeaf(false));
@@ -405,10 +436,151 @@ class NoteReaderMobilePlugin extends Plugin {
     if (!leaves.length) {
       await leaf.setViewState({ active: true, type: VIEW_TYPE });
     }
-    this.app.workspace.revealLeaf(leaf);
+    await this.app.workspace.revealLeaf(leaf);
+  }
+
+  getSourceLeaf() {
+    const active = this.app.workspace.activeLeaf;
+    if (active?.view?.file) return active;
+    // Only fall back while our own panel is active, never from an unrelated tab.
+    if (active?.view?.getViewType?.() === VIEW_TYPE && this.sourceLeaf?.view?.containerEl?.isConnected) return this.sourceLeaf;
+    return null;
+  }
+
+  captureSelection() {
+    const leaf = this.getSourceLeaf();
+    const view = leaf?.view;
+    if (!view?.file || this.app.workspace.activeLeaf !== leaf) return;
+    const editorText = view.getMode?.() === 'preview' ? '' : String(view.editor?.getSelection?.() || '').trim();
+    let context;
+    if (editorText) {
+      context = { text: editorText, from: view.editor.getCursor('from'), pageNumber: 1 };
+    } else if (typeof window !== 'undefined') {
+      const selection = window.getSelection?.();
+      if (!selection?.anchorNode || !selection.focusNode
+        || !view.contentEl?.contains(selection.anchorNode) || !view.contentEl.contains(selection.focusNode)) return;
+      context = getWindowSelectionContext();
+    }
+    if (!context?.text) return;
+    this.sourceLeaf = leaf;
+    this.selectionSnapshot = { ...context, leaf, filePath: view.file.path, mtime: view.file.stat?.mtime };
+  }
+
+  getSelectionSnapshot() {
+    this.captureSelection();
+    const saved = this.selectionSnapshot;
+    const leaf = this.getSourceLeaf();
+    return saved && saved.leaf === leaf && saved.filePath === leaf?.view?.file?.path
+      && saved.mtime === leaf.view.file.stat?.mtime ? saved : null;
+  }
+
+  showToolbar() {
+    this.captureSelection();
+    this.toolbarEnabled = true;
+    this.syncToolbar();
+    if (!this.getSourceLeaf()) new Notice(getUi(this.settings).noFile);
+  }
+
+  removeToolbar() {
+    this.dock?.host.removeClass('note-reader-mobile-docked-view');
+    this.dock?.root.remove();
+    this.dock = null;
+  }
+
+  async closeReader(stop = true) {
+    if (stop) {
+      this.toolbarEnabled = false;
+      this.stopReading({ quiet: true });
+      this.removeToolbar();
+    } else this.toolbarEnabled = true;
+    const source = this.getSourceLeaf() || this.sourceLeaf;
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) leaf.detach();
+    if (source?.view?.containerEl?.isConnected) await this.app.workspace.revealLeaf(source);
+    if (stop) this.selectionSnapshot = null;
+    this.syncToolbar();
+  }
+
+  syncToolbar() {
+    if (!this.toolbarEnabled) return;
+    const leaf = this.getSourceLeaf();
+    const host = leaf?.view?.containerEl;
+    if (!host || !['md', 'markdown', 'txt', 'pdf'].includes(String(leaf.view.file?.extension).toLowerCase())) {
+      this.removeToolbar();
+      return;
+    }
+    this.sourceLeaf = leaf;
+    if (this.dock?.host === host && this.dock.root.isConnected && this.dock.language === this.settings.settingsLanguage) {
+      this.updateToolbar();
+      return;
+    }
+    this.removeToolbar();
+    const ui = getUi(this.settings);
+    host.addClass('note-reader-mobile-docked-view');
+    const root = host.createDiv({ cls: 'note-reader-mobile-dock' });
+    root.setAttr('role', 'region'); root.setAttr('aria-label', ui.toolbar);
+    root.addEventListener('pointerdown', () => this.captureSelection(), true);
+    const header = root.createDiv({ cls: 'note-reader-mobile-dock-header' });
+    const scope = header.createEl('select');
+    scope.setAttr('aria-label', ui.readingScope);
+    for (const [value, label] of [['file', ui.readFile], ['selection', ui.readSelection], ['from', ui.readFromSelection], ['saved', ui.resumeFile]]) {
+      const option = scope.createEl('option', { text: label }); option.value = value;
+    }
+    scope.value = this.readingScope || 'file';
+    scope.addEventListener('change', () => { this.readingScope = scope.value; this.updateToolbar(); });
+    createButton(header, { icon: 'panel-top', iconOnly: true, label: ui.openPanel, onClick: () => this.runSafely(() => this.activateView()) });
+    createButton(header, { icon: 'x', iconOnly: true, label: ui.closeReader, onClick: () => this.runSafely(() => this.closeReader()) });
+    const controls = root.createDiv({ cls: 'note-reader-mobile-dock-controls' });
+    const previous = createButton(controls, { icon: 'skip-back', iconOnly: true, label: ui.previous, onClick: () => this.moveChunk(-1) });
+    const play = createButton(controls, { icon: 'play', iconOnly: true, label: ui.readFile, onClick: () => {
+      if (this.queue.items.length && !['complete', 'error'].includes(this.queue.status)) this.togglePause();
+      else this.runSafely(() => this[({ selection: 'readSelection', from: 'readFromSelection', saved: 'resumeFile' })[scope.value] || 'readFile']());
+    } });
+    const next = createButton(controls, { icon: 'skip-forward', iconOnly: true, label: ui.next, onClick: () => this.moveChunk(1) });
+    const timeline = controls.createDiv({ cls: 'note-reader-mobile-dock-timeline' });
+    const seek = timeline.createEl('input', { cls: 'note-reader-mobile-range' });
+    seek.type = 'range'; seek.min = '0'; seek.max = '1'; seek.step = '0.1';
+    seek.setAttr('aria-label', ui.currentAudio);
+    const status = timeline.createDiv({ cls: 'note-reader-mobile-dock-status' });
+    let scrubbing = false;
+    seek.addEventListener('input', () => { scrubbing = true; });
+    seek.addEventListener('change', () => { this.seekAudioTo(Number(seek.value)); scrubbing = false; this.updateToolbar(); });
+    seek.addEventListener('blur', () => { scrubbing = false; this.updateToolbar(); });
+    const speed = controls.createEl('select'); speed.setAttr('aria-label', ui.speed);
+    for (const value of SPEED_PRESETS) { const option = speed.createEl('option', { text: `${value}x` }); option.value = String(value); }
+    speed.addEventListener('change', () => this.runSafely(() => this.setPlaybackSpeed(Number(speed.value))));
+    this.dock = { root, host, language: this.settings.settingsLanguage, scope, play, previous, next, seek, speed, status, isScrubbing: () => scrubbing };
+    this.updateToolbar();
+  }
+
+  updateToolbar() {
+    const refs = this.dock;
+    if (!refs) return;
+    const ui = getUi(this.settings);
+    const active = this.queue.items.length > 0 && !['complete', 'error'].includes(this.queue.status);
+    const label = active ? (this.pauseRequested ? ui.resume : ui.pause) : ui[({ selection: 'readSelection', from: 'readFromSelection', saved: 'resumeFile' })[refs.scope.value] || 'readFile'];
+    const icon = active && !this.pauseRequested ? 'pause' : 'play';
+    if (refs.icon !== icon) { setIcon(refs.play.firstElementChild, icon); refs.icon = icon; }
+    refs.play.setAttr('aria-label', label); refs.play.setAttr('title', label);
+    refs.scope.disabled = !!active || this.phaseOverride === 'extracting';
+    refs.play.disabled = this.phaseOverride === 'extracting';
+    refs.previous.disabled = this.queue.currentIndex <= 0;
+    refs.next.disabled = this.queue.currentIndex < 0 || this.queue.currentIndex >= this.queue.items.length - 1;
+    refs.seek.disabled = !this.canSeekAudio();
+    if (!refs.isScrubbing()) {
+      refs.seek.max = String(this.canSeekAudio() ? this.activeAudio.duration : 1);
+      refs.seek.value = String(this.canSeekAudio() ? this.activeAudio.currentTime : 0);
+    }
+    refs.speed.value = String(this.settings.speed);
+    const phase = this.pauseRequested ? 'paused' : this.phaseOverride || this.queue.status;
+    const path = getCurrentPlaybackItem(this.queue)?.metadata?.filePath;
+    const filename = path ? path.split('/').pop() : '';
+    refs.status.textContent = `${ui[phase] || ui.idle} · ${ui.progress(Math.max(0, this.queue.currentIndex + 1), this.queue.items.length)}`;
+    if (filename && path !== this.getSourceLeaf()?.view.file?.path) refs.status.textContent = `${filename} · ${refs.status.textContent}`;
+    refs.status.setAttr('title', this.statusDetail || refs.status.textContent);
   }
 
   renderViews() {
+    this.syncToolbar();
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
       if (leaf.view && leaf.view.contentEl) {
         this.renderView(leaf.view.contentEl);
@@ -426,7 +598,10 @@ class NoteReaderMobilePlugin extends Plugin {
     }
     containerEl.empty();
     containerEl.addClass('note-reader-mobile-root');
-    containerEl.createEl('h2', { text: ui.title });
+    const header = containerEl.createDiv({ cls: 'note-reader-mobile-panel-header' });
+    createButton(header, { icon: 'arrow-left', iconOnly: true, label: ui.backToText, onClick: () => this.runSafely(() => this.closeReader(false)) });
+    header.createEl('h2', { text: ui.title });
+    createButton(header, { icon: 'x', iconOnly: true, label: ui.closeReader, onClick: () => this.runSafely(() => this.closeReader()) });
 
     const status = containerEl.createDiv({ cls: 'note-reader-mobile-status' });
     const displayedPhase = this.phaseOverride || this.queue.status;
@@ -569,25 +744,34 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   getActiveFile() {
-    return this.app.workspace.getActiveFile ? this.app.workspace.getActiveFile() : null;
+    return this.getSourceLeaf()?.view.file || (this.app.workspace.getActiveFile ? this.app.workspace.getActiveFile() : null);
   }
 
   getMarkdownView() {
+    const source = this.getSourceLeaf()?.view;
+    if (source?.editor) return source;
     return this.app.workspace.getActiveViewOfType
       ? this.app.workspace.getActiveViewOfType(MarkdownView)
       : null;
   }
 
   getSelectedText() {
+    const saved = this.getSelectionSnapshot();
+    if (saved) return saved.text;
     const view = this.getMarkdownView();
-    const editorSelection = view && view.editor && typeof view.editor.getSelection === 'function'
+    const editorSelection = view && view.getMode?.() !== 'preview' && view.editor && typeof view.editor.getSelection === 'function'
       ? String(view.editor.getSelection() || '').trim()
       : '';
-    return editorSelection || getWindowSelectionContext().text;
+    return editorSelection;
   }
 
   getMarkdownTextFromSelection() {
     const view = this.getMarkdownView();
+    const saved = this.getSelectionSnapshot();
+    if (saved?.from && view?.editor) {
+      const lastLine = Math.max(0, view.editor.lineCount() - 1);
+      return String(view.editor.getRange(saved.from, { line: lastLine, ch: String(view.editor.getLine(lastLine) || '').length }) || '');
+    }
     if (view && view.editor && typeof view.editor.getCursor === 'function') {
       const selection = String(view.editor.getSelection ? view.editor.getSelection() : '').trim();
       if (selection) {
@@ -611,7 +795,7 @@ class NoteReaderMobilePlugin extends Plugin {
     this.startTextSession(text, {
       file,
       kind: file && String(file.extension).toLowerCase() === 'pdf' ? 'pdf' : 'markdown',
-      pageNumber: getWindowSelectionContext().pageNumber,
+      pageNumber: this.getSelectionSnapshot()?.pageNumber || 1,
       sourceLabel: ui.sourceSelection,
     });
   }
@@ -625,7 +809,7 @@ class NoteReaderMobilePlugin extends Plugin {
       return;
     }
     if (String(file.extension || '').toLowerCase() === 'pdf') {
-      const selection = getWindowSelectionContext();
+      const selection = this.getSelectionSnapshot() || { text: selectedText, pageNumber: 1 };
       await this.readPdf(file, {
         anchor: selection.text,
         sourceLabel: ui.sourceSelection,
@@ -745,6 +929,8 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   startPreparedChunks(chunks, context) {
+    this.toolbarEnabled = true;
+    this.syncToolbar();
     const items = (Array.isArray(chunks) ? chunks : []).map((chunk, index) => {
       const detailed = chunk && typeof chunk === 'object' ? chunk : { metadata: null, text: chunk };
       return {
@@ -776,6 +962,8 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   beginOperation(status) {
+    this.toolbarEnabled = true;
+    this.syncToolbar();
     this.cancelActivePlayback();
     this.sessionId += 1;
     this.runId += 1;

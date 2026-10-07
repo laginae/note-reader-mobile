@@ -4,7 +4,7 @@
 
 A mobile-first Obsidian read-aloud plugin for Markdown notes and text-based PDFs.
 
-**0.2.0 is a mobile testing release.** Automated checks are included; Android and iOS device validation remains pending. This is a separate plugin and does not change the desktop edition.
+**0.2.1 is a mobile testing release.** Automated checks are included; full Android and iOS device validation remains pending. This is a separate plugin and does not change the desktop edition.
 
 ## Install and Start
 
@@ -16,6 +16,14 @@ A mobile-first Obsidian read-aloud plugin for Markdown notes and text-based PDFs
 This release is not a community-directory submission. Avoid starting the desktop and mobile plugins at the same time in one vault.
 
 ## Current capabilities
+
+### Phone controls
+
+The reader icon and `Show reading toolbar` command open a compact bottom bar inside the current note or PDF, without switching to a separate tab. Select a reading scope and press Play. Pause/resume, previous/next chunk, current-audio seeking and playback speed are available beside the document. Seeking only applies to loaded online audio, not system speech.
+
+Expand opens the full player. Its back arrow returns to the document without stopping playback; Close stops and hides the reader. Select text and choose Continue from selection to start there. The source selection is retained in memory before opening the panel, not written to settings; select it again after editing the document.
+
+iOS/Android device verification is still needed, particularly for native selection menus and PDF views.
 
 - Read selected note or PDF text
 - Continue reading from a selected position
@@ -70,7 +78,7 @@ It must return MP3 or WAV bytes. If a remote secret is selected, it is sent as a
 
 ## Playback and Limits
 
-| Capability | Mobile 0.2.0 testing edition | Desktop 0.9.4 |
+| Capability | Mobile 0.2.1 testing edition | Desktop 0.9.4 |
 | --- | --- | --- |
 | Markdown and text PDFs | Supported; device testing pending | Supported |
 | MiMo and custom speech APIs | Added; device/provider checks pending | Available |

@@ -7,6 +7,99 @@
   overflow-x: hidden;
 }
 
+.note-reader-mobile-panel-header {
+  position: sticky;
+  top: -14px;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  background: var(--background-primary);
+  padding-block: 6px;
+}
+
+.note-reader-mobile-panel-header h2 {
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+/* A normal-flow sibling of the document, not an overlay over text or the keyboard. */
+.note-reader-mobile-docked-view {
+  display: flex;
+  flex-direction: column;
+}
+
+.note-reader-mobile-docked-view > .view-content {
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
+}
+
+.note-reader-mobile-dock {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  padding: 2px 8px max(4px, env(safe-area-inset-bottom));
+}
+
+.note-reader-mobile-dock-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 44px;
+  gap: 4px;
+  align-items: center;
+}
+
+.note-reader-mobile-dock-controls {
+  display: grid;
+  grid-template-columns: 44px 44px 44px minmax(32px, 1fr) 64px;
+  gap: 2px;
+  align-items: center;
+}
+
+.note-reader-mobile-dock select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  font-size: var(--font-ui-small);
+}
+
+.note-reader-mobile-dock .note-reader-mobile-icon-button,
+.note-reader-mobile-panel-header .note-reader-mobile-icon-button {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+}
+
+.note-reader-mobile-dock .note-reader-mobile-icon-button:hover,
+.note-reader-mobile-panel-header .note-reader-mobile-icon-button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.note-reader-mobile-dock-timeline {
+  min-width: 0;
+}
+
+.note-reader-mobile-dock-status {
+  font-size: 11px;
+  line-height: 14px;
+  height: 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.note-reader-mobile-dock .note-reader-mobile-range {
+  display: block;
+  min-height: 26px;
+  opacity: 0.65;
+}
+
 .note-reader-mobile-root h2 {
   margin: 0;
   font-size: 1.35rem;

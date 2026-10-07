@@ -7,12 +7,16 @@ const { grantByokConsent, normalizeByokProfile } = require('../src/byok');
 
 class Element {
   constructor(tag = 'div', options = {}) { this.tagName = tag.toUpperCase(); this.textContent = options.text || ''; this.className = options.cls || ''; this.children = []; this.events = {}; this.attrs = {}; }
-  createEl(tag, options) { const el = new Element(tag, options); this.children.push(el); return el; }
+  createEl(tag, options) { const el = new Element(tag, options); el.parentElement = this; this.children.push(el); return el; }
+  get isConnected() { return !this.removed; }
+  remove() { this.removed = true; if (this.parentElement) this.parentElement.children = this.parentElement.children.filter((el) => el !== this); }
+  contains(node) { return this.all().includes(node); }
   createDiv(options) { return this.createEl('div', options); }
   createSpan(options) { return this.createEl('span', options); }
   get firstElementChild() { return this.children[0]; }
   empty() { this.children = []; }
   addClass(name) { this.className += ` ${name}`; }
+  removeClass(name) { this.className = this.className.split(' ').filter((item) => item !== name).join(' '); }
   toggleClass() {}
   setAttr(name, value) { this.attrs[name] = value; }
   addEventListener(name, callback) { this.events[name] = callback; }
@@ -69,6 +73,140 @@ function fixture(overrides = {}) {
   plugin.lastSpeechConfiguration = plugin.speechConfigurationKey();
   return plugin;
 }
+
+function sourceFixture(plugin, extension = 'md') {
+  const containerEl = new Element();
+  const contentEl = containerEl.createDiv();
+  const file = { path: `public-example.${extension}`, extension, stat: { mtime: 1 } };
+  const leaf = { view: { file, containerEl, contentEl, getViewType: () => extension === 'pdf' ? 'pdf' : 'markdown' } };
+  plugin.app.workspace.activeLeaf = leaf;
+  plugin.app.workspace.revealLeaf = async (value) => { plugin.app.workspace.activeLeaf = value; };
+  return leaf;
+}
+
+test('toolbar stays inside the source view, survives refresh, and closes without leaving audio running', async () => {
+  const plugin = fixture({ speechEngine: 'mimo' });
+  const source = sourceFixture(plugin);
+  plugin.activeAudio = { currentTime: 2, duration: 30, pause() {}, removeAttribute() {}, load() {} };
+  plugin.showToolbar();
+  const dock = plugin.dock;
+  assert.equal(dock.root.parentElement, source.view.containerEl);
+  assert.equal(plugin.app.workspace.activeLeaf, source);
+  dock.seek.value = '12'; dock.seek.events.input();
+  plugin.renderViews();
+  assert.equal(plugin.dock, dock);
+  assert.equal(dock.seek.value, '12');
+  dock.seek.events.change();
+  assert.equal(plugin.activeAudio.currentTime, 12);
+  await plugin.closeReader();
+  assert.equal(dock.root.removed, true);
+  assert.equal(plugin.dock, null);
+  assert.equal(plugin.activeAudio, null);
+  assert.equal(plugin.queue.items.length, 0);
+  plugin.renderViews();
+  assert.equal(plugin.dock, null);
+});
+
+test('panel has return and close controls; returning preserves playback and focuses source', async () => {
+  const plugin = fixture({ settingsLanguage: 'chinese' });
+  const source = sourceFixture(plugin);
+  plugin.sourceLeaf = source;
+  let detached = false;
+  const panel = { view: { getViewType: () => loaded.__test.VIEW_TYPE }, detach() { detached = true; } };
+  plugin.app.workspace.activeLeaf = panel;
+  plugin.app.workspace.getLeavesOfType = () => detached ? [] : [panel];
+  const root = new Element(); plugin.renderView(root);
+  assert.ok(root.all().some((el) => el.attrs['aria-label'] === '返回正文'));
+  assert.ok(root.all().some((el) => el.attrs['aria-label'] === '停止并关闭朗读器'));
+  const queue = plugin.queue;
+  await plugin.closeReader(false);
+  assert.equal(detached, true);
+  assert.equal(plugin.app.workspace.activeLeaf, source);
+  assert.equal(plugin.queue, queue);
+  assert.ok(plugin.dock);
+});
+
+test('Markdown selection survives panel focus and collapsed editor selection with exact cursor position', async () => {
+  const plugin = fixture();
+  const source = sourceFixture(plugin);
+  let selected = 'Second sentence';
+  let range;
+  source.view.editor = { getSelection: () => selected, getCursor: () => ({ line: 2, ch: 4 }), lineCount: () => 5,
+    getLine: () => 'last line', getRange: (from, to) => { range = { from, to }; return 'Second sentence and remainder.'; } };
+  plugin.captureSelection();
+  plugin.app.workspace.activeLeaf = { view: { getViewType: () => loaded.__test.VIEW_TYPE } };
+  selected = '';
+  let started;
+  plugin.startTextSession = (text, context) => { started = { text, context }; };
+  await plugin.readFromSelection();
+  assert.equal(started.text, 'Second sentence and remainder.');
+  assert.equal(started.context.file, source.view.file);
+  assert.deepEqual(range.from, { line: 2, ch: 4 });
+  assert.deepEqual(range.to, { line: 4, ch: 9 });
+});
+
+test('cached selection cannot leak into another file or survive a modified source', () => {
+  const plugin = fixture();
+  const source = sourceFixture(plugin);
+  source.view.editor = { getSelection: () => 'Selected', getCursor: () => ({ line: 0, ch: 0 }) };
+  plugin.captureSelection();
+  source.view.editor.getSelection = () => '';
+  source.view.file.stat.mtime = 2;
+  assert.equal(plugin.getSelectionSnapshot(), null);
+  source.view.file.stat.mtime = 1;
+  sourceFixture(plugin);
+  assert.equal(plugin.getSelectionSnapshot(), null);
+  plugin.app.workspace.activeLeaf = { view: { getViewType: () => 'search' } };
+  assert.equal(plugin.getSelectionSnapshot(), null);
+});
+
+test('PDF selected text and page survive opening the panel; unrelated selections are ignored', async () => {
+  const plugin = fixture();
+  const source = sourceFixture(plugin, 'pdf');
+  const span = source.view.contentEl.createSpan();
+  span.nodeType = 1;
+  span.closest = () => ({ getAttribute: (key) => key === 'data-page-number' ? '6' : '' });
+  let selection = { anchorNode: span, focusNode: span, toString: () => 'Public PDF sentence.' };
+  const originalWindow = global.window;
+  global.window = { getSelection: () => selection };
+  try {
+    plugin.captureSelection();
+    selection = { anchorNode: new Element(), focusNode: new Element(), toString: () => 'Wrong panel text' };
+    plugin.captureSelection();
+    plugin.app.workspace.activeLeaf = { view: { getViewType: () => loaded.__test.VIEW_TYPE } };
+    let read;
+    plugin.readPdf = async (file, context) => { read = { file, context }; };
+    await plugin.readFromSelection();
+    assert.equal(read.context.anchor, 'Public PDF sentence.');
+    assert.equal(read.context.startPageNumber, 6);
+    assert.equal(read.file, source.view.file);
+  } finally { global.window = originalWindow; }
+});
+
+test('preview mode uses visible selection instead of a stale editor selection', () => {
+  const plugin = fixture();
+  const source = sourceFixture(plugin);
+  source.view.getMode = () => 'preview';
+  source.view.editor = { getSelection: () => 'Stale hidden editor text' };
+  const span = source.view.contentEl.createSpan(); span.nodeType = 1;
+  const originalWindow = global.window;
+  global.window = { getSelection: () => ({ anchorNode: span, focusNode: span, toString: () => 'Visible selected text' }) };
+  try { assert.equal(plugin.getSelectedText(), 'Visible selected text'); }
+  finally { global.window = originalWindow; }
+});
+
+test('toolbar follows file tabs without duplicating and system speech disables seeking', () => {
+  const plugin = fixture();
+  sourceFixture(plugin);
+  plugin.showToolbar();
+  const old = plugin.dock;
+  assert.equal(old.seek.disabled, true);
+  const next = sourceFixture(plugin, 'pdf');
+  plugin.syncToolbar();
+  assert.equal(old.root.removed, true);
+  assert.equal(plugin.dock.host, next.view.containerEl);
+  assert.equal(next.view.containerEl.children.filter((el) => el.className === 'note-reader-mobile-dock').length, 1);
+});
 
 test('speed and volume update active audio immediately and persist without cancelling', async () => {
   const plugin = fixture({ speechEngine: 'mimo' });
