@@ -1,5 +1,7 @@
 # Note and PDF Voice Reader for Mobile
 
+简单公式如 `$z_{\mathrm d}$` 会读作“z sub d”。字体和排版空白不会使简单公式被误判为复杂公式；仍尊重主动跳过公式的设置，并保留复杂公式保护。
+
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 这是面向 Obsidian 手机和平板端的笔记、PDF 与本地 HTML 朗读插件。

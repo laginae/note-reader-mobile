@@ -1,5 +1,7 @@
 # Note and PDF Voice Reader for Mobile
 
+Simple formulas such as `$z_{\mathrm d}$` are read as "z sub d". Font and spacing commands do not make a short formula complex; explicit skip settings and complex-formula safeguards still apply.
+
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 A mobile-first read-aloud companion for Markdown notes, text-based PDFs and local HTML files in Obsidian.
