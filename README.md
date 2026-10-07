@@ -1,7 +1,5 @@
 # Note and PDF Voice Reader for Mobile
 
-Simple formulas such as `$z_{\mathrm d}$` are read as "z sub d". Font and spacing commands do not make a short formula complex; explicit skip settings and complex-formula safeguards still apply.
-
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 A mobile-first read-aloud companion for Markdown notes, text-based PDFs and local HTML files in Obsidian.
@@ -112,6 +110,8 @@ The configured endpoint must use HTTPS and accept a JSON request:
 It must return MP3 or WAV bytes. If a remote secret is selected, it is sent as an `Authorization: Bearer` header.
 
 ## Playback and Limits
+
+Simple formulas such as `$z_{\mathrm d}$` are read as "z sub d". Font and spacing commands do not make a short formula complex; explicit skip settings and complex-formula safeguards still apply.
 
 **PDF headers and footers:** Settings > Academic > Skip PDF headers and footers is on by default. It locally removes short repeated edge lines (such as authors and journal names) and recognizable page numbers, without modifying the PDF. It applies to full-PDF reading, continuing from a selection and resuming; selection-only reading keeps the selected text. Changes take effect on the next reading session.
 
