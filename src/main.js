@@ -2,8 +2,10 @@
 const { PlaybackTimings, PreparationPool } = require('./preparation-pool');
 const { ELEVENLABS_MODELS } = require('./openrouter-elevenlabs');
 const { getOpenRouterPricing } = require('./openrouter-pricing');
+const { disclosure, renderEngineChoice, renderPreview } = require('./engine-setup');
 const { applyTerms, fitSpeechParts, adjacentContext } = require('./speech-options');
 const { addSpeechContextSetting, addSpeechTermsSettings } = require('./speech-options-settings');
+const { registerReadingMenu, syncEditingToolbar, addReadingMenuSettings } = require('./reading-menu');
 
 const {
   ItemView,
@@ -338,6 +340,9 @@ class NoteReaderMobileView extends ItemView {
 class NoteReaderMobilePlugin extends Plugin {
   async onload() {
     this.settings = normalizeSettings(await this.loadData());
+    registerReadingMenu(this, snapshot => this.runSafely(() => this.startTextSession(snapshot.text, {
+      file: snapshot.file, kind: 'markdown', sourceLabel: snapshot.file.basename || snapshot.file.name,
+    })), message => new Notice(message));
     this.settings.readingPositions = normalizeReadingPositions(this.settings.readingPositions);
     this.queue = createPlaybackQueueState();
     this.sessionId = 0;
@@ -432,10 +437,11 @@ class NoteReaderMobilePlugin extends Plugin {
     this.lastSpeechConfiguration = configuration;
     this.settings.readingPositions = normalizeReadingPositions(this.settings.readingPositions);
     await this.saveData(this.settings);
+    await syncEditingToolbar(this);
   }
 
   speechConfigurationKey() {
-    const { speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
+    const { readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
     return JSON.stringify(speech);
   }
 
@@ -1166,6 +1172,21 @@ class NoteReaderMobilePlugin extends Plugin {
     }
   }
 
+  isSettingsPreviewBusy() {
+    return Boolean((this.exportModal && !this.exportModal.closed) || this.phaseOverride
+      || (this.queue.items.length && !['complete', 'error'].includes(this.queue.status)));
+  }
+
+  async runSettingsPreview(sample, token) {
+    if (this.isSettingsPreviewBusy() || token.cancelled) return 'cancelled';
+    const outcome = await this.startPreparedChunks([sample], { kind: 'preview', sourceLabel: 'Voice test', settingsPreview: token });
+    return outcome || 'cancelled';
+  }
+
+  stopSettingsPreview(token) {
+    if (this.previewOwner === token) this.stopReading({ quiet: true });
+  }
+
   startTextSession(text, context) {
     const clean = this.prepareText(text);
     const chunks = splitTextForSpeechChunks(
@@ -1176,7 +1197,13 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   startPreparedChunks(chunks, context) {
+    this.previewOwner = context.settingsPreview || null;
     this.sessionSpeechSettings = normalizeSettings(this.settings);
+    if (this.previewOwner) {
+      this.sessionSpeechSettings.speechTermsEnabled = false;
+      this.sessionSpeechSettings.rapidStart = false;
+      this.sessionSpeechSettings.openRouterContext = false;
+    }
     this.toolbarEnabled = true;
     this.syncToolbar();
     const items = (Array.isArray(chunks) ? chunks : []).map((chunk, index) => {
@@ -1208,10 +1235,11 @@ class NoteReaderMobilePlugin extends Plugin {
     this.statusDetail = '';
     this.phaseOverride = '';
     this.renderViews();
-    void this.runFromCurrent();
+    return this.runFromCurrent();
   }
 
   beginOperation(status) {
+    this.previewOwner = null;
     this.toolbarEnabled = true;
     this.syncToolbar();
     this.cancelActivePlayback();
@@ -1256,12 +1284,13 @@ class NoteReaderMobilePlugin extends Plugin {
           this.queue = reducePlaybackQueueState(this.queue, { type: 'next' });
           this.statusDetail = '';
           this.renderViews();
-          return;
+          return 'complete';
         }
         this.queue = reducePlaybackQueueState(this.queue, { type: 'next' });
       } catch (error) {
         if (sessionId === this.sessionId && runId === this.runId) {
           this.fail(error);
+          return String(error?.message || 'Test failed');
         }
         return;
       }
@@ -1583,6 +1612,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   stopReading(options = {}) {
+    this.previewOwner = null;
     this.sessionId += 1;
     this.runId += 1;
     this.resetPreparation();
@@ -1687,22 +1717,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
 
     if (this.activeTab === 'engine') {
 
-    new Setting(containerEl)
-      .setName(ui.engine)
-      .setDesc(ui.engineDesc)
-      .addDropdown((dropdown) => dropdown
-        .addOption('system', ui.system)
-        .addOption('azure', ui.azure)
-        .addOption('openrouter', ui.openRouter)
-        .addOption('mimo', ui.mimo)
-        .addOption('byok', ui.byok)
-        .addOption('remote-cosyvoice', ui.remote)
-        .setValue(this.plugin.settings.speechEngine)
-        .onChange(async (value) => {
-          this.plugin.settings.speechEngine = value;
-          await this.plugin.saveSettings();
-          this.display();
-        }));
+    renderEngineChoice(containerEl, this, Setting, true, { system: ui.system, local: ui.remote, byok: ui.byok });
 
     if (this.plugin.settings.speechEngine === 'system') {
       const voices = typeof window !== 'undefined' && window.speechSynthesis
@@ -1722,7 +1737,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
     }
 
     if (this.plugin.settings.speechEngine === 'azure') {
-      new Setting(containerEl)
+      this.engineConsentSetting = new Setting(containerEl)
         .setName(ui.consent)
         .setDesc(ui.azureConsentDesc)
         .addToggle((toggle) => toggle.setValue(this.plugin.settings.azureConsent).onChange(async (value) => {
@@ -1759,7 +1774,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
 
     if (this.plugin.settings.speechEngine === 'openrouter') {
       const elevenModel = ELEVENLABS_MODELS.find(([id]) => id === this.plugin.settings.openRouterModel);
-      new Setting(containerEl)
+      this.engineConsentSetting = new Setting(containerEl)
         .setName(ui.consent)
         .setDesc(ui.openRouterConsentDesc)
         .addToggle((toggle) => toggle.setValue(this.plugin.settings.openRouterConsent).onChange(async (value) => {
@@ -1803,7 +1818,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
     if (this.plugin.settings.speechEngine === 'remote-cosyvoice') {
       let remoteConsentToggle;
       let remoteSecretComponent;
-      new Setting(containerEl)
+      this.engineConsentSetting = new Setting(containerEl)
         .setName(ui.consent)
         .setDesc(ui.remoteConsentDesc)
         .addToggle((toggle) => {
@@ -1836,7 +1851,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
 
     if (this.plugin.settings.speechEngine === 'mimo') {
       const zh = this.plugin.settings.settingsLanguage === 'chinese';
-      new Setting(containerEl).setName(ui.consent)
+      this.engineConsentSetting = new Setting(containerEl).setName(ui.consent)
         .setDesc(zh ? '允许发送当前分段到小米 MiMo。请核对当前服务的数据政策和费用；每段最多 200 字符。' : 'Allow sending the current chunk to Xiaomi MiMo. Review its current data policy and pricing; chunks are capped at 200 characters.')
         .addToggle((toggle) => toggle.setValue(this.plugin.settings.mimoConsent).onChange(async (value) => {
           this.plugin.settings.mimoConsent = value;
@@ -1852,9 +1867,12 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
       });
     }
     if (this.plugin.settings.speechEngine === 'byok') this.displayByok(containerEl, ui);
+    if (this.engineConsentSetting?.settingEl.parentElement === containerEl) containerEl.insertBefore(this.engineConsentSetting.settingEl, null);
+    renderPreview(containerEl, this, setIcon);
     }
 
     if (this.activeTab === 'playback') {
+    addReadingMenuSettings(containerEl, this.plugin, Setting);
 
     new Setting(containerEl)
       .setName(ui.speed)
@@ -1871,12 +1889,13 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
         await this.plugin.saveSettings();
       }));
     if (this.plugin.settings.speechEngine === 'system') containerEl.createEl('p', { cls: 'setting-item-description', text: ui.systemControls });
-    new Setting(containerEl).setName(ui.rapidStart).setDesc(ui.rapidStartDesc)
+    const playbackAdvanced = disclosure(containerEl, languageIndex === 2 ? '高级选项' : 'Advanced options');
+    new Setting(playbackAdvanced).setName(ui.rapidStart).setDesc(ui.rapidStartDesc)
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.rapidStart).onChange(async (value) => {
         this.plugin.settings.rapidStart = value;
         await this.plugin.saveSettings();
       }));
-    new Setting(containerEl).setName(this.plugin.settings.settingsLanguage === 'chinese' ? '提前准备下一小段' : 'Prepare the next audio part')
+    new Setting(playbackAdvanced).setName(this.plugin.settings.settingsLanguage === 'chinese' ? '提前准备下一小段' : 'Prepare the next audio part')
       .setDesc(this.plugin.settings.settingsLanguage === 'chinese'
         ? '默认关闭。开启后最多提前发送下一小段，最多两个合成请求同时进行；未收听的内容也可能计费。停止或换文档清除本次音频缓存。'
         : 'Off by default. Prepare at most one upcoming part, with up to two synthesis requests in flight. Unplayed text may be billed. Stop or change documents to clear session audio.')
@@ -1884,7 +1903,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
         this.plugin.settings.onlinePrefetch = value;
         await this.plugin.saveSettings();
       }));
-    new Setting(containerEl)
+    new Setting(playbackAdvanced)
       .setName(ui.chunks)
       .setDesc(ui.chunksDesc)
       .addText((text) => text.setValue(this.plugin.settings.chunkLimits).onChange(async (value) => {
@@ -2001,7 +2020,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
       secretComponent?.setValue(this.plugin.settings.byokProfile.secretName);
       await this.plugin.saveSettings();
     };
-    new Setting(containerEl).setName(ui.consent)
+    this.engineConsentSetting = new Setting(containerEl).setName(ui.consent)
       .setDesc(label('Allow this configuration to send text and incur charges. The service may retain text or use it for training; BYOK does not guarantee ZDR. Review the provider policy before enabling. Revoking consent cannot recall sent text.', '允许此配置发送文本并产生费用。服务可能留存文本或用于训练，BYOK 不保证 ZDR；开启前请核对服务商政策。撤销授权无法收回已发送文本。'))
       .addToggle((toggle) => {
         consentToggle = toggle;

@@ -88,6 +88,16 @@ function fixture(overrides = {}) {
   return plugin;
 }
 
+test('reading menu and floating icon preferences do not interrupt playback', async () => {
+  const plugin=fixture(); let stops=0; plugin.stopReading=()=>{stops++;};
+  plugin.settings.readingContextMenu=false;
+  plugin.settings.readingFloatingToolbar=true;
+  plugin.settings.readingFloatingAction='from-selection';
+  await plugin.saveSettings();
+  assert.equal(stops,0);
+  assert.equal(plugin.saved.at(-1).readingFloatingAction,'from-selection');
+});
+
 function sourceFixture(plugin, extension = 'md') {
   const containerEl = new Element();
   containerEl.createDiv({ cls: 'view-header' });
@@ -124,7 +134,7 @@ test('ElevenLabs advanced options hide for unsupported models without discarding
   assert.ok(!tab.containerEl.all().some(el => el.textContent === 'ElevenLabs advanced options'));
   assert.equal(plugin.settings.openRouterContext, true);
   tab.activeTab = 'academic'; tab.display();
-  const row = tab.containerEl.rows.find(row => row.name === 'Term rules');
+  const row = tab.containerEl.all().flatMap(el => el.rows || []).find(row => row.name === 'Term rules');
   await row.input.change('AI = artificial intelligence');
   assert.equal(plugin.settings.speechTerms, 'AI = artificial intelligence');
   await row.input.change('invalid');
@@ -571,11 +581,41 @@ test('all six engines have compact categorized bilingual settings', () => {
     const tab = new loaded.__test.NoteReaderMobileSettingTab(plugin.app, plugin);
     tab.display();
     assert.equal(tab.containerEl.all().filter((el) => el.attrs.role === 'tab').length, 4);
-    assert.ok(tab.containerEl.rows.some((row) => row.name === loaded.__test.UI[settingsLanguage].engine));
+    assert.ok(tab.containerEl.rows.some((row) => row.name === (settingsLanguage === 'chinese' ? '朗读方式' : 'Reading method')));
     tab.activeTab = 'privacy'; tab.containerEl.rows = []; tab.display();
     assert.ok(tab.containerEl.rows.some((row) => row.name === loaded.__test.UI[settingsLanguage].privacy));
     assert.ok(!tab.containerEl.rows.some((row) => row.name === loaded.__test.UI[settingsLanguage].engine));
   }
+});
+
+test('mobile method switching preserves provider settings and self-hosted is not labelled local speech', async () => {
+  const plugin = fixture({ speechEngine: 'openrouter', openRouterSecretName: 'existing-key' });
+  const tab = new loaded.__test.NoteReaderMobileSettingTab(plugin.app, plugin);
+  const row = name => tab.containerEl.rows.findLast(r => r.name === name);
+  tab.display();
+  assert.equal(Object.keys(row('Reading method').input.options).length, 3);
+  assert.equal(row('Reading method').input.options.local, 'Self-hosted service');
+  const before = JSON.stringify(plugin.settings);
+  await row('Reading method').input.change('system');
+  await row('Reading method').input.change('online');
+  assert.equal(JSON.stringify(plugin.settings), before);
+});
+
+test('mobile preview uses only a fixed chunk, suppresses term substitutions and does not write history', async () => {
+  const plugin = fixture({ speechEngine: 'mimo', speechTermsEnabled: true, speechTerms: 'Hello = private term' });
+  plugin.queue = createPlaybackQueueState();
+  plugin.syncToolbar = () => {}; plugin.renderViews = () => {};
+  const texts = [];
+  plugin.playOnlineChunk = async text => { texts.push(text); return 'ended'; };
+  const result = await plugin.runSettingsPreview('Hello, this is a short voice test.', {});
+  assert.equal(result, 'complete');
+  assert.deepEqual(texts, ['Hello, this is a short voice test.']);
+  assert.equal(plugin.sessionSpeechSettings.speechTermsEnabled, false);
+  assert.equal(plugin.settings.speechTermsEnabled, true);
+  assert.equal(plugin.saved.length, 0);
+  const old = plugin.previewOwner; plugin.previewOwner = {};
+  plugin.stopReading = () => { throw Error('Must not stop a newer session'); };
+  plugin.stopSettingsPreview(old);
 });
 
 test('academic reading uses core opt-in settings only when Markdown stripping is enabled', () => {

@@ -9,6 +9,7 @@ A mobile-first read-aloud companion for Markdown notes, text-based PDFs and loca
 ## Highlights
 
 - **Read beside your document:** touch-sized controls with pause, Stop, speed and current-audio seeking.
+- **Editor menu:** Markdown Live Preview/Source context menus offer Read aloud from here and Read selected text. Mobile availability depends on Obsidian exposing its editor menu; the system selection popup is not replaced. Existing toolbar actions remain available for PDF, HTML and reading views.
 - **Academic PDF reading:** column-aware text ordering, optional header/footer filtering, and conservative footnote separation, including first-page correspondence blocks.
 - **Document outlines:** navigate Markdown headings, HTML h1-h6 headings and PDF bookmarks/inferred headings. Clicking a title locates the source without starting speech. The adjacent range button selects a section for Read section or Read from section.
 - **Sentence-first chunks:** move a complete sentence to the next chunk when it cannot fit; split only oversized sentences at clause/word boundaries within the provider cap. Conservatively join PDF cross-page continuations.
@@ -17,6 +18,10 @@ A mobile-first read-aloud companion for Markdown notes, text-based PDFs and loca
 - **Privacy choices:** device speech by default; optional online providers require permission. No developer relay server or built-in telemetry.
 
 ## Install and Start
+
+Playback settings offer independent switches for the editor reading menu and the optional Editing Toolbar speaker icon. The icon defaults to selected text, with an option to read from the selection to the document end. It requires a selection and an enabled Editing Toolbar plugin.
+
+Settings separate **Reading method** (System speech / Online speech / Self-hosted service) from the online provider. Existing configurations are preserved. Configure the secret and voice, review the processing permission, then use **Test voice** for a fixed sample that never reads your notes. Online tests may incur charges. **Stop test** cancels the test; it does not replace an ongoing reading or export. Self-hosted speech uses your HTTPS endpoint, not a model running on the phone. Advanced chunk and prefetch controls are collapsed in Playback settings.
 
 1. Use Obsidian 1.11.4 or later and back up your vault.
 2. Open **Settings → Community plugins → Browse** and search for **Note and PDF Voice Reader for Mobile**.

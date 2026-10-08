@@ -83,6 +83,9 @@ const OPENROUTER_VOICES = {
 };
 
 const DEFAULT_SETTINGS = Object.freeze({
+  readingContextMenu: true,
+  readingFloatingToolbar: false,
+  readingFloatingAction: 'selection',
   settingsLanguage: 'english',
   speechEngine: 'system',
   systemVoiceUri: '',
@@ -173,6 +176,9 @@ function normalizeChunkLimits(value) {
 function normalizeSettings(value) {
   const source = value && typeof value === 'object' ? value : {};
   return {
+    readingContextMenu: source.readingContextMenu !== false,
+    readingFloatingToolbar: source.readingFloatingToolbar === true,
+    readingFloatingAction: source.readingFloatingAction === 'from-selection' ? 'from-selection' : 'selection',
     settingsLanguage: source.settingsLanguage === 'chinese' ? 'chinese' : 'english',
     speechEngine: normalizeSpeechEngine(source.speechEngine),
     systemVoiceUri: String(source.systemVoiceUri || '').trim().slice(0, 500),
