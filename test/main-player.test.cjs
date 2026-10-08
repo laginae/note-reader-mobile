@@ -99,14 +99,14 @@ function sourceFixture(plugin, extension = 'md') {
 }
 
 test('speech terms are applied once per request without changing queue text or exceeding limits', async () => {
-  const plugin = fixture({ speechEngine:'mimo', speechTermsEnabled:true, speechTerms:'BESS = battery energy storage system' });
-  const source = ('BESS control. ').repeat(30);
+  const plugin = fixture({ speechEngine:'mimo', speechTermsEnabled:true, speechTerms:'AI = artificial intelligence' });
+  const source = ('AI control. ').repeat(30);
   plugin.queue = createPlaybackQueueState([{id:'one', text:source}]);
   const sent = [];
   plugin.playOnlineChunk = async text => { sent.push(text); return 'ended'; };
   await plugin.playOnlineParts(source, plugin.sessionId, plugin.runId);
   assert.ok(sent.every(text => text.length <= 200));
-  assert.equal(sent.join(''), source.replaceAll('BESS', 'battery energy storage system'));
+  assert.equal(sent.join(''), source.replaceAll('AI', 'artificial intelligence'));
   assert.equal(plugin.queue.items[0].text, source);
   plugin.openAudioExport();
   assert.deepEqual(plugin.exportModal.texts, sent);
@@ -124,10 +124,10 @@ test('ElevenLabs advanced options hide for unsupported models without discarding
   assert.equal(plugin.settings.openRouterContext, true);
   tab.activeTab = 'academic'; tab.display();
   const row = tab.containerEl.rows.find(row => row.name === 'Term rules');
-  await row.input.change('BESS = B E S S');
-  assert.equal(plugin.settings.speechTerms, 'BESS = B E S S');
+  await row.input.change('AI = artificial intelligence');
+  assert.equal(plugin.settings.speechTerms, 'AI = artificial intelligence');
   await row.input.change('invalid');
-  assert.equal(plugin.settings.speechTerms, 'BESS = B E S S');
+  assert.equal(plugin.settings.speechTerms, 'AI = artificial intelligence');
   assert.equal(row.input.inputEl.attrs['aria-invalid'], 'true');
 });
 
