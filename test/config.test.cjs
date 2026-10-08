@@ -1,5 +1,19 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const { ELEVENLABS_MODELS, ELEVENLABS_VOICES } = require('../src/openrouter-elevenlabs');
+
+test('ElevenLabs presets retain defaults, model-specific voices and fixed private MP3 requests', () => {
+  assert.equal(DEFAULT_SETTINGS.openRouterModel, 'hexgrad/kokoro-82m');
+  for (const [model] of ELEVENLABS_MODELS) {
+    assert.equal(getDefaultOpenRouterVoice(model), 'george');
+    assert.deepEqual(getOpenRouterVoices(model), ELEVENLABS_VOICES);
+    const body = buildOpenRouterRequestBody('Public sample.', {
+      openRouterModel:model, openRouterVoice:'sarah', speed:2, openRouterZdrOnly:false,
+      previous_text:'must not send', next_text:'must not send', provider:{zdr:false}});
+    assert.deepEqual(body, {model, voice:'sarah', input:'Public sample.', speed:1, response_format:'mp3',
+      provider:{data_collection:'deny', zdr:true}});
+  }
+});
 
 const {
   DEFAULT_SETTINGS,

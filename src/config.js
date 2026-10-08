@@ -1,6 +1,8 @@
 'use strict';
 
 const { normalizeByokProfile } = require('./byok');
+const { ELEVENLABS_MODELS, ELEVENLABS_VOICES } = require('./openrouter-elevenlabs');
+const { normalizedTerms, contextOptions } = require('./speech-options');
 const MIMO_ENDPOINT = 'https://api.xiaomimimo.com/v1/chat/completions';
 const MIMO_VOICES = ['白桦', '苏打', '冰糖', '茉莉', 'Dean', 'Milo', 'Mia', 'Chloe'];
 
@@ -11,6 +13,7 @@ const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/audio/speech';
 const ONLINE_CHUNK_LIMITS = [200, 400, 800];
 const SPEECH_ENGINES = ['system', 'azure', 'openrouter', 'mimo', 'remote-cosyvoice', 'byok'];
 const OPENROUTER_DEFAULT_VOICES = Object.freeze({
+  ...Object.fromEntries(ELEVENLABS_MODELS.map(([model, voice]) => [model, voice])),
   'hexgrad/kokoro-82m': 'bm_george',
   'microsoft/mai-voice-2': 'en-US-Ethan:MAI-Voice-2',
   'microsoft/mai-voice-2-flash': 'en-US-Ethan:MAI-Voice-2-Flash',
@@ -29,6 +32,7 @@ const MICROSOFT_VOICES = [
 ];
 
 const OPENROUTER_MODELS = [
+  ...ELEVENLABS_MODELS.map(([model, , en, zh]) => [model, en, zh]),
   ['hexgrad/kokoro-82m', 'Kokoro 82M - low cost, broad voice choice', 'Kokoro 82M - 成本较低、音色丰富'],
   ['microsoft/mai-voice-2', 'Microsoft MAI-Voice-2 - expressive long-form voice', 'Microsoft MAI-Voice-2 - 表现力较强、适合长文'],
   ['microsoft/mai-voice-2-flash', 'Microsoft MAI-Voice-2 Flash - lower latency', 'Microsoft MAI-Voice-2 Flash - 延迟较低'],
@@ -36,6 +40,7 @@ const OPENROUTER_MODELS = [
 ];
 
 const OPENROUTER_VOICES = {
+  ...Object.fromEntries(ELEVENLABS_MODELS.map(([model]) => [model, ELEVENLABS_VOICES])),
   'hexgrad/kokoro-82m': [
     ['zf_xiaoxiao', 'Xiaoxiao (Chinese female)', '小晓（中文女声）'],
     ['zm_yunyang', 'Yunyang (Chinese male)', '云扬（中文男声）'],
@@ -87,6 +92,9 @@ const DEFAULT_SETTINGS = Object.freeze({
   azureVoice: DEFAULT_AZURE_VOICE,
   azureSecretName: '',
   openRouterConsent: false,
+  openRouterContext: false,
+  speechTermsEnabled: false,
+  speechTerms: '',
   openRouterModel: DEFAULT_OPENROUTER_MODEL,
   openRouterVoice: DEFAULT_OPENROUTER_VOICE,
   openRouterSecretName: '',
@@ -173,6 +181,9 @@ function normalizeSettings(value) {
     azureVoice: normalizeAzureVoice(source.azureVoice),
     azureSecretName: normalizeSecretName(source.azureSecretName),
     openRouterConsent: source.openRouterConsent === true,
+    openRouterContext: source.openRouterContext === true,
+    speechTermsEnabled: source.speechTermsEnabled === true,
+    speechTerms: normalizedTerms(source.speechTerms),
     openRouterModel: normalizeOpenRouterModel(source.openRouterModel),
     openRouterVoice: normalizeOpenRouterVoice(source.openRouterVoice),
     openRouterSecretName: normalizeSecretName(source.openRouterSecretName),
@@ -233,7 +244,7 @@ function buildAzureSsml(text, settings = {}) {
   return `<speak version="1.0" xml:lang="${locale}"><voice name="${escapeXml(voice)}"><prosody rate="${rate}">${escapeXml(text)}</prosody></voice></speak>`;
 }
 
-function buildOpenRouterRequestBody(text, settings = {}) {
+function buildOpenRouterRequestBody(text, settings = {}, context = {}) {
   return {
     model: normalizeOpenRouterModel(settings.openRouterModel),
     input: String(text || ''),
@@ -243,6 +254,7 @@ function buildOpenRouterRequestBody(text, settings = {}) {
     provider: {
       data_collection: 'deny',
       zdr: true,
+      ...contextOptions(settings, context),
     },
   };
 }

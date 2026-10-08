@@ -54,6 +54,12 @@ On phones, opening the reading bar temporarily keeps the current pane's native t
 
 ## Online Setup
 
+**ElevenLabs via OpenRouter:** choose Multilingual v2, Flash v2.5, Eleven v4 or v4 Turbo, with George, Sarah, Daniel, Alice, Brian or Lily. Existing defaults are unchanged. Audio uses MP3 at normal synthesis speed; adjust playback speed in the player. ZDR and denial of data collection remain mandatory; an unavailable route fails without relaxing privacy. The [speech catalog](https://openrouter.ai/api/v1/models?output_modalities=speech) and [ZDR endpoint list](https://openrouter.ai/api/v1/endpoints/zdr) were checked on 2026-10-08. Prices and availability can change.
+
+**Optional continuity:** these four models show an ElevenLabs advanced section with an experimental, default-off continuity toggle. It sends only neighboring sentences within the current reading range, up to 160 characters per side, through `provider.options.elevenlabs`; it never reads outside a selected range or uses request history. Other models hide the option and receive no context parameters, while the saved preference is retained. No cloud pronunciation dictionary or automatic performance tags are added. Source audio tags may affect delivery. Parameter support follows the [OpenRouter announcement](https://openrouter.ai/blog/announcements/elevenlabs-on-openrouter/); paid listening tests have not been performed, so improved sound is not guaranteed.
+
+**Local term pronunciations:** in Academic settings, enable rules such as `BESS = B E S S`, one per line. Rules are case-sensitive literal matches (not regex), longest match first, without recursive replacement. Up to 100 rules are stored locally; each term is limited to 80 characters and each pronunciation to 120. Online engines receive the substituted speech text, not the rule list. Source documents and original reading positions are preserved; expanded requests are split to respect engine limits. These rules also apply to export. Rules take effect next session; edited rules do not change already-prepared audio.
+
 **Xiaomi MiMo:** create a key in the [MiMo console](https://platform.xiaomimimo.com/), select its Obsidian secret, and enable processing. The default voice is **白桦 (Baihua)**, which can be tried with Chinese and English text. MiMo uses conservative 200-character chunks and rejects incomplete generation instead of silently advancing. This is a client-side limit, not an advertised provider maximum. Pricing/promotions may change; no permanent free-service guarantee is made. See the [official synthesis guide](https://mimo.mi.com/docs/en-US/quick-start/usage-guide/audio/speech-synthesis-v2.5).
 
 **OpenRouter:** choose a secret, model and voice, then enable processing. **Azure:** also set the Speech resource region and cloud. Check your resource/provider privacy and retention settings; the plugin does not certify a service as no-training or ZDR merely because a key is configured.
@@ -112,6 +118,8 @@ It must return MP3 or WAV bytes. If a remote secret is selected, it is sent as a
 ## Playback and Limits
 
 Simple formulas such as `$z_{\mathrm d}$` are read as "z sub d". Font and spacing commands do not make a short formula complex; explicit skip settings and complex-formula safeguards still apply.
+
+Conventional bounds such as `[\ell,u]` and matching `E_{\min}` / `E_{\max}` endpoints use concise "to" phrasing; verbose mode retains "closed interval". Other bracketed pairs keep their brackets. Simply subscripted adjacent factors are separated by "times".
 
 **PDF headers and footers:** Settings > Academic > Skip PDF headers and footers is on by default. It locally removes short repeated edge lines (such as authors and journal names) and recognizable page numbers, without modifying the PDF. It applies to full-PDF reading, continuing from a selection and resuming; selection-only reading keeps the selected text. Changes take effect on the next reading session.
 

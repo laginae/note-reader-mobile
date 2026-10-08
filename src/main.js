@@ -1,4 +1,7 @@
 'use strict';
+const { ELEVENLABS_MODELS } = require('./openrouter-elevenlabs');
+const { applyTerms, fitSpeechParts, adjacentContext } = require('./speech-options');
+const { addSpeechContextSetting, addSpeechTermsSettings } = require('./speech-options-settings');
 
 const {
   ItemView,
@@ -422,7 +425,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   speechConfigurationKey() {
-    const { speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, ...speech } = this.settings;
+    const { speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
     return JSON.stringify(speech);
   }
 
@@ -1163,6 +1166,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   startPreparedChunks(chunks, context) {
+    this.sessionSpeechSettings = normalizeSettings(this.settings);
     this.toolbarEnabled = true;
     this.syncToolbar();
     const items = (Array.isArray(chunks) ? chunks : []).map((chunk, index) => {
@@ -1259,7 +1263,7 @@ class NoteReaderMobilePlugin extends Plugin {
       return Promise.reject(new Error('System speech is unavailable on this device. Choose an online engine.'));
     }
     const synthesis = window.speechSynthesis;
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(applyTerms(text, this.sessionSpeechSettings || this.settings));
     utterance.rate = this.settings.speed;
     utterance.volume = this.settings.volume ?? 1;
     const voice = synthesis.getVoices().find((entry) => entry.voiceURI === this.settings.systemVoiceUri);
@@ -1297,23 +1301,32 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   async playOnlineParts(text, sessionId, runId) {
-    const parts = splitOpeningAudioParts(text, this.settings.rapidStart === true);
-    for (const part of parts) {
+    const settings = this.sessionSpeechSettings || this.settings;
+    const opening = applyTerms(text, settings) === text ? splitOpeningAudioParts(text, this.settings.rapidStart === true) : [text];
+    const parts = opening.flatMap(value => fitSpeechParts(value, settings, this.settings.speechEngine === 'mimo' ? 200 : 800));
+    const index = this.queue.currentIndex;
+    for (const [partIndex, part] of parts.entries()) {
       await this.waitUntilResumed(sessionId, runId);
       if (sessionId !== this.sessionId || runId !== this.runId) return 'cancelled';
-      const outcome = await this.playOnlineChunk(part, sessionId, runId);
+      const context = adjacentContext(parts.map(entry => entry.source), partIndex,
+        this.queue.items[index - 1]?.text || '', this.queue.items[index + 1]?.text || '');
+      const outcome = await this.playOnlineChunk(part.text, sessionId, runId, context);
       if (outcome !== 'ended' || sessionId !== this.sessionId || runId !== this.runId) return 'cancelled';
     }
     return 'ended';
   }
 
-  async playOnlineChunk(text, sessionId, runId) {
+  async playOnlineChunk(text, sessionId, runId, context = {}) {
     await this.waitUntilResumed(sessionId, runId);
     if (sessionId !== this.sessionId || runId !== this.runId) return 'cancelled';
     this.statusDetail = getUi(this.settings).synthesizing;
     this.phaseOverride = 'synthesizing';
     this.renderViews();
-    const audioData = await synthesizeOnlineChunk(text, this.settings, this.app, undefined, () => this.settings);
+    const snapshot = this.sessionSpeechSettings || this.settings;
+    const currentSettings = () => ({ ...this.settings, speechTerms: snapshot.speechTerms,
+      speechTermsEnabled: snapshot.speechTermsEnabled,
+      openRouterContext: snapshot.openRouterContext === true && this.settings.openRouterContext === true });
+    const audioData = await synthesizeOnlineChunk(text, currentSettings(), this.app, undefined, currentSettings, context);
     if (sessionId !== this.sessionId || runId !== this.runId) {
       return 'cancelled';
     }
@@ -1660,6 +1673,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
     }
 
     if (this.plugin.settings.speechEngine === 'openrouter') {
+      const elevenModel = ELEVENLABS_MODELS.find(([id]) => id === this.plugin.settings.openRouterModel);
       new Setting(containerEl)
         .setName(ui.consent)
         .setDesc(ui.openRouterConsentDesc)
@@ -1669,6 +1683,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
         }));
       new Setting(containerEl)
         .setName(ui.model)
+        .setDesc(elevenModel ? elevenModel[languageIndex === 2 ? 5 : 4] : '')
         .addDropdown((dropdown) => {
           OPENROUTER_MODELS.forEach((model) => dropdown.addOption(model[0], model[languageIndex]));
           dropdown.setValue(this.plugin.settings.openRouterModel).onChange(async (value) => {
@@ -1689,6 +1704,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
           });
         });
       this.addSecretSetting(containerEl, ui, ui.openRouterSecretDesc, 'openRouterSecretName');
+      addSpeechContextSetting(containerEl, this.plugin);
     }
 
     if (this.plugin.settings.speechEngine === 'remote-cosyvoice') {
@@ -1776,6 +1792,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
       }));
     }
     if (this.activeTab === 'academic') {
+    addSpeechTermsSettings(containerEl, this.plugin);
     new Setting(containerEl)
       .setName(ui.stripMarkdown)
       .setDesc(ui.stripMarkdownDesc)

@@ -1,14 +1,17 @@
 'use strict';
 const { Modal } = require('obsidian');
 const { normalizeSettings } = require('./config');
+const { fitSpeechParts, adjacentContext } = require('./speech-options');
 const { synthesizeOnlineChunk } = require('./speech-services');
 const { MAX_EXPORT_CHARS, EXPORT_FOLDER, synthesizeWav, saveExport } = require('./audio-export');
 
 class AudioExportModal extends Modal {
   constructor(plugin) {
     super(plugin.app); this.plugin = plugin; this.closed = false; this.busy = false;
-    this.texts = plugin.queue.items.map((item) => item.text);
     this.settings = normalizeSettings(plugin.settings);
+    const parts = plugin.queue.items.flatMap(item => fitSpeechParts(item.text, this.settings, this.settings.speechEngine === 'mimo' ? 200 : 800));
+    this.texts = parts.map(part => part.text);
+    this.sourceTexts = parts.map(part => part.source);
   }
   t(zh, en) { return this.plugin.settings.settingsLanguage === 'chinese' ? zh : en; }
   onOpen() {
@@ -41,10 +44,10 @@ class AudioExportModal extends Modal {
       const decoder = new Decoder();
       this.plugin.pauseReading();
       const bytes = await synthesizeWav(this.texts, { decoder, cancelled,
-        synthesize: (text) => synthesizeOnlineChunk(text, this.settings, this.plugin.app, undefined, () => {
+        synthesize: (text, index) => synthesizeOnlineChunk(text, this.settings, this.plugin.app, undefined, () => {
           if (cancelled()) throw new Error('Export cancelled.');
           return this.plugin.settings;
-        }),
+        }, adjacentContext(this.sourceTexts, index)),
         progress: (done, total) => { if (!this.closed) this.status.textContent = `${this.t('正在导出', 'Exporting')} ${done} / ${total}`; },
       });
       if (cancelled()) return;
@@ -57,10 +60,10 @@ class AudioExportModal extends Modal {
       if (!this.closed) this.status.textContent = `${this.t('导出未完成：', 'Export incomplete: ')}${error instanceof Error ? error.message : this.t('请检查服务配置。', 'Check service settings.')}`;
     } finally {
       // A fresh confirmation is required for any retry, since requests may already have been billed.
-      this.busy = false; this.texts = [];
+      this.busy = false; this.texts = []; this.sourceTexts = [];
       if (!this.closed) this.startButton.disabled = true;
     }
   }
-  onClose() { this.closed = true; this.texts = []; this.contentEl.empty(); if (this.plugin.exportModal === this) this.plugin.exportModal = null; }
+  onClose() { this.closed = true; this.texts = []; this.sourceTexts = []; this.contentEl.empty(); if (this.plugin.exportModal === this) this.plugin.exportModal = null; }
 }
 module.exports = { AudioExportModal };

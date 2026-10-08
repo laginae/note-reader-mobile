@@ -22,6 +22,33 @@ const {
 } = require('../src/speech-services');
 Module._load = originalLoad;
 
+test('ElevenLabs privacy-route rejection never retries with weaker flags or exposes server text', async () => {
+  for (const status of [403, 404]) {
+    let count = 0;
+    await assert.rejects(synthesizeOpenRouter('Public sample.', {
+      openRouterConsent:true, openRouterSecretName:'speech-key',
+      openRouterModel:'elevenlabs/eleven-v4', openRouterVoice:'george', speed:2,
+    }, {secretStorage:{getSecret:()=> 'test-key'}}, async request => {
+      count++;
+      const body = JSON.parse(request.body);
+      assert.equal(body.provider.zdr, true);
+      assert.equal(body.provider.data_collection, 'deny');
+      assert.equal(body.speed, 1);
+      return {status, arrayBuffer:jsonBytes({error:'private echoed response'}), headers:{}};
+    }), error => !error.message.includes('private echoed'));
+    assert.equal(count, 1);
+  }
+});
+
+test('OpenRouter forwards bounded opt-in context only for supported models and keeps ZDR', async () => {
+  const { buildOpenRouterRequestBody } = require('../src/config');
+  const context = { previous:'Previous sentence.', next:'Next sentence.' };
+  const settings = { openRouterModel:'elevenlabs/eleven-v4', openRouterContext:true };
+  const body = buildOpenRouterRequestBody('Current.', settings, context);
+  assert.deepEqual(body.provider, { data_collection:'deny', zdr:true, options:{elevenlabs:{previous_text:context.previous, next_text:context.next}} });
+  assert.deepEqual(buildOpenRouterRequestBody('Current.', {...settings, openRouterModel:'hexgrad/kokoro-82m'}, context).provider, {data_collection:'deny', zdr:true});
+});
+
 test('quota errors are explicit', () => {
   assert.match(createHttpError(402, 'OpenRouter TTS').message, /insufficient balance or quota/);
   assert.match(createHttpError(429, 'OpenRouter TTS').message, /rate or quota limit/);

@@ -38,7 +38,7 @@ async function synthesizeWav(texts, { synthesize, decoder, cancelled = () => fal
     if (!texts.length || texts.reduce((n, text) => n + text.length, 0) > MAX_EXPORT_CHARS) throw new Error('Choose a shorter reading range (maximum 30,000 characters). / 导出范围最多 30,000 字符。');
     for (let i = 0; i < texts.length; i++) {
       check(); progress(i, texts.length);
-      const result = await synthesize(texts[i]); check();
+      const result = await synthesize(texts[i], i); check();
       const audio = await decoder.decodeAudioData(result.arrayBuffer.slice(0)); check();
       if (rate !== null && rate !== audio.sampleRate) throw new Error('Decoded audio rates differ.');
       rate = audio.sampleRate;

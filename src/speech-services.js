@@ -126,7 +126,7 @@ async function synthesizeAzure(text, settings, app, requestFn) {
   }, 'Azure Speech', requestFn);
 }
 
-async function synthesizeOpenRouter(text, settings, app, requestFn) {
+async function synthesizeOpenRouter(text, settings, app, requestFn, context = {}) {
   if (settings.openRouterConsent !== true) {
     throw new Error('Enable OpenRouter online processing in settings before sending text.');
   }
@@ -140,7 +140,7 @@ async function synthesizeOpenRouter(text, settings, app, requestFn) {
       'HTTP-Referer': 'https://github.com/laginae/note-reader-mobile',
       'X-Title': 'Note and PDF Voice Reader Mobile',
     },
-    body: JSON.stringify(buildOpenRouterRequestBody(text, settings)),
+    body: JSON.stringify(buildOpenRouterRequestBody(text, settings, context)),
   }, 'OpenRouter TTS', requestFn);
 }
 
@@ -198,7 +198,7 @@ function onlineConfiguration(settings) {
   return JSON.stringify([engine, Object.keys(s).filter(key => key.startsWith(prefix)).sort().map(key => [key, s[key]])]);
 }
 
-async function synthesizeOnlineChunk(text, settings, app, requestFn, getCurrentSettings = () => settings) {
+async function synthesizeOnlineChunk(text, settings, app, requestFn, getCurrentSettings = () => settings, context = {}) {
   const snapshot = normalizeSettings(settings);
   const signature = onlineConfiguration(snapshot);
   const assertCurrent = () => {
@@ -208,7 +208,7 @@ async function synthesizeOnlineChunk(text, settings, app, requestFn, getCurrentS
   if (typeof text !== 'string' || !text.trim() || text.length > (snapshot.speechEngine === 'mimo' ? 200 : 800)) throw new Error('Text exceeds this engine\'s chunk limit. / 文本超出当前引擎分段上限。');
   const engines = { azure: synthesizeAzure, openrouter: synthesizeOpenRouter, mimo: synthesizeMimo, byok: synthesizeByok, 'remote-cosyvoice': synthesizeRemoteCosyVoice };
   if (!Object.hasOwn(engines, snapshot.speechEngine)) throw new Error('The selected engine does not use an online audio endpoint.');
-  const audio = await engines[snapshot.speechEngine](text, snapshot, app, requestFn);
+  const audio = await engines[snapshot.speechEngine](text, snapshot, app, requestFn, context);
   assertCurrent();
   return audio;
 }

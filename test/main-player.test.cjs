@@ -27,11 +27,12 @@ class Element {
   removeClass(name) { this.className = this.className.split(' ').filter((item) => item !== name).join(' '); }
   toggleClass() {}
   setAttr(name, value) { this.attrs[name] = value; }
+  setAttribute(name, value) { this.attrs[name] = value; }
   addEventListener(name, callback) { this.events[name] = callback; }
   all() { return [this, ...this.children.flatMap((el) => el.all())]; }
 }
 class Control {
-  constructor() { this.options = {}; }
+  constructor() { this.options = {}; this.inputEl = new Element('textarea'); }
   setValue(value) { this.value = value; return this; }
   onChange(callback) { this.change = callback; return this; }
   onClick(callback) { this.click = callback; return this; }
@@ -42,11 +43,12 @@ class Control {
   setButtonText() { return this; }
 }
 class Setting {
-  constructor(container) { container.rows ||= []; container.rows.push(this); }
+  constructor(container) { container.rows ||= []; container.rows.push(this); this.settingEl = container.createDiv(); }
   setName(value) { this.name = value; return this; }
   setDesc(value) { this.desc = value; return this; }
   control(callback) { this.input = new Control(); callback(this.input); return this; }
   addText(callback) { return this.control(callback); }
+  addTextArea(callback) { return this.control(callback); }
   addSlider(callback) { return this.control(callback); }
   addDropdown(callback) { return this.control(callback); }
   addToggle(callback) { return this.control(callback); }
@@ -95,6 +97,39 @@ function sourceFixture(plugin, extension = 'md') {
   plugin.app.workspace.revealLeaf = async (value) => { plugin.app.workspace.activeLeaf = value; };
   return leaf;
 }
+
+test('speech terms are applied once per request without changing queue text or exceeding limits', async () => {
+  const plugin = fixture({ speechEngine:'mimo', speechTermsEnabled:true, speechTerms:'BESS = battery energy storage system' });
+  const source = ('BESS control. ').repeat(30);
+  plugin.queue = createPlaybackQueueState([{id:'one', text:source}]);
+  const sent = [];
+  plugin.playOnlineChunk = async text => { sent.push(text); return 'ended'; };
+  await plugin.playOnlineParts(source, plugin.sessionId, plugin.runId);
+  assert.ok(sent.every(text => text.length <= 200));
+  assert.equal(sent.join(''), source.replaceAll('BESS', 'battery energy storage system'));
+  assert.equal(plugin.queue.items[0].text, source);
+  plugin.openAudioExport();
+  assert.deepEqual(plugin.exportModal.texts, sent);
+  plugin.exportModal.close();
+  assert.deepEqual(plugin.exportModal, null);
+});
+
+test('ElevenLabs advanced options hide for unsupported models without discarding preferences', async () => {
+  const plugin = fixture({ speechEngine:'openrouter', openRouterModel:'elevenlabs/eleven-v4', openRouterContext:true });
+  const tab = new loaded.__test.NoteReaderMobileSettingTab(plugin.app, plugin);
+  tab.display();
+  assert.ok(tab.containerEl.all().some(el => el.textContent === 'ElevenLabs advanced options'));
+  plugin.settings.openRouterModel = 'hexgrad/kokoro-82m'; tab.display();
+  assert.ok(!tab.containerEl.all().some(el => el.textContent === 'ElevenLabs advanced options'));
+  assert.equal(plugin.settings.openRouterContext, true);
+  tab.activeTab = 'academic'; tab.display();
+  const row = tab.containerEl.rows.find(row => row.name === 'Term rules');
+  await row.input.change('BESS = B E S S');
+  assert.equal(plugin.settings.speechTerms, 'BESS = B E S S');
+  await row.input.change('invalid');
+  assert.equal(plugin.settings.speechTerms, 'BESS = B E S S');
+  assert.equal(row.input.inputEl.attrs['aria-invalid'], 'true');
+});
 
 test('cache and position clearing are separate and preserve playback and credentials', async () => {
   const plugin = fixture(); const queue = plugin.queue;
@@ -380,7 +415,7 @@ test('configuration or consent changes invalidate playback before saving', async
 test('late synthesized audio is discarded after consent revocation', async () => {
   const plugin = fixture({ speechEngine: 'mimo', mimoConsent: true });
   let resolve;
-  synthesize = (...args) => { assert.equal(args[4](), plugin.settings); return new Promise((done) => { resolve = done; }); };
+  synthesize = (...args) => { assert.deepEqual(args[4](), plugin.settings); return new Promise((done) => { resolve = done; }); };
   const pending = plugin.playOnlineChunk('Hello', 1, 1);
   await new Promise((done) => setImmediate(done));
   plugin.settings.mimoConsent = false;
