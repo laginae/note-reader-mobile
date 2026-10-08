@@ -470,6 +470,81 @@ test('each online audio applies persistent playback settings and detaches event 
   } finally { global.Audio = OriginalAudio; }
 });
 
+test('lookahead is opt-in, bounded to one part, and ready audio is reused on replay', async () => {
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  const OriginalAudio = global.Audio;
+  const instances = [];
+  global.Audio = class {
+    constructor() { instances.push(this); }
+    play() { this.onplaying?.(); return Promise.resolve(); }
+    pause() {} removeAttribute() {} load() {}
+  };
+  try {
+    for (const enabled of [false, true]) {
+      const plugin = fixture({speechEngine:'mimo', onlinePrefetch:enabled});
+      const text = multipartText;
+      plugin.queue = createPlaybackQueueState([{text}]);
+      const requests = [];
+      synthesize = value => new Promise(resolve => requests.push({value, resolve}));
+      const running = plugin.playOnlineParts(text, 1, 1); await tick();
+      assert.equal(requests.length, enabled ? 2 : 1);
+      requests[0].resolve({arrayBuffer:new ArrayBuffer(8),mimeType:'audio/mpeg'}); await tick();
+      const firstAudio = plugin.activeAudio;
+      if (enabled) { requests[1].resolve({arrayBuffer:new ArrayBuffer(8),mimeType:'audio/mpeg'}); await tick(); }
+      firstAudio.onended(); await tick();
+      assert.equal(requests.length, enabled ? 3 : 2);
+      if (!enabled) { requests[1].resolve({arrayBuffer:new ArrayBuffer(8),mimeType:'audio/mpeg'}); await tick(); }
+      plugin.activeAudio.onended(); await tick();
+      requests[2].resolve({arrayBuffer:new ArrayBuffer(8),mimeType:'audio/mpeg'}); await tick();
+      plugin.activeAudio.onended(); assert.equal(await running,'ended');
+      const replay = plugin.playOnlineParts(text,1,1); await tick();
+      for (let i=0;i<3;i++) {plugin.activeAudio.onended(); await tick();}
+      assert.equal(await replay,'ended'); assert.equal(requests.length,3);
+      assert.equal(plugin.playbackTimings.snapshot().counts.requests,3);
+      assert.ok(plugin.playbackTimings.snapshot().counts.cacheHit >= 3);
+      plugin.stopReading({quiet:true}); assert.equal(plugin.preparationPool.bytes,0);
+    }
+  } finally {global.Audio=OriginalAudio;}
+});
+
+test('rapid mobile navigation shares a two-request budget and never plays stale responses', async () => {
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  const plugin = fixture({speechEngine:'mimo', onlinePrefetch:true});
+  plugin.queue = createPlaybackQueueState(['One.', 'Two.', 'Three.', 'Four.', 'Five.']);
+  const requests=[]; const instances=[]; const OriginalAudio=global.Audio;
+  synthesize = text => new Promise(resolve => requests.push({text,resolve}));
+  global.Audio=class {
+    constructor(){instances.push(this);} play(){this.onplaying?.();return Promise.resolve();}
+    pause(){} removeAttribute(){} load(){}
+  };
+  try {
+    const old = plugin.runFromCurrent(); await tick(); assert.equal(requests.length,2);
+    plugin.moveChunk(1); await tick(); plugin.moveChunk(1); await tick(); plugin.moveChunk(1); await tick();
+    assert.equal(requests.length,2);
+    requests[0].resolve({arrayBuffer:new ArrayBuffer(8),mimeType:'audio/mpeg'}); await tick();
+    assert.equal(requests[2].text,'Four.'); assert.equal(instances.length,0);
+    requests[2].resolve({arrayBuffer:new ArrayBuffer(8),mimeType:'audio/mpeg'}); await tick();
+    assert.equal(instances.length,1); assert.equal(plugin.queue.currentIndex,3);
+    plugin.stopReading({quiet:true});
+    requests[1].resolve({arrayBuffer:new ArrayBuffer(8),mimeType:'audio/mpeg'});
+    for(const request of requests.slice(3)) request.resolve({arrayBuffer:new ArrayBuffer(8),mimeType:'audio/mpeg'});
+    await old; await tick(); assert.equal(instances.length,1);
+    assert.equal(plugin.preparationPool.bytes,0);
+  } finally {global.Audio=OriginalAudio;}
+});
+
+test('changing synthesis configuration clears session audio while speed and volume keep it', async () => {
+  const plugin=fixture({speechEngine:'mimo'}); let calls=0;
+  synthesize=async () => {calls++;return {arrayBuffer:new ArrayBuffer(8),mimeType:'audio/mpeg'};};
+  const part={text:'Public example.',key:'1:0:0',context:{}};
+  await plugin.prepareOnlineAudio(part,1);
+  plugin.settings.speed=1.5; plugin.settings.volume=.3; await plugin.saveSettings();
+  await plugin.prepareOnlineAudio(part,1); assert.equal(calls,1);
+  plugin.settings.mimoVoice='Dean'; await plugin.saveSettings();
+  assert.equal(plugin.preparationPool.bytes,0);
+  assert.equal(plugin.preparationPool.state(part.key),undefined);
+});
+
 test('a superseded run does not advance a new queue after position save finishes', async () => {
   const plugin = fixture();
   plugin.playSystemChunk = async () => 'ended';

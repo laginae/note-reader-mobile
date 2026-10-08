@@ -1,4 +1,5 @@
 'use strict';
+const { PlaybackTimings, PreparationPool } = require('./preparation-pool');
 const { ELEVENLABS_MODELS } = require('./openrouter-elevenlabs');
 const { getOpenRouterPricing } = require('./openrouter-pricing');
 const { applyTerms, fitSpeechParts, adjacentContext } = require('./speech-options');
@@ -131,7 +132,7 @@ const UI = {
     playbackTab: 'Playback',
     academicTab: 'Academic',
     rapidStart: 'Rapid start',
-    rapidStartDesc: 'Use a complete first sentence of 5–19 characters when possible; otherwise use the normal 20/40-character opening stages. Audio parts are requested only as playback reaches them.',
+    rapidStartDesc: 'Use a complete first sentence of 5–19 characters when possible; otherwise use the normal 20/40-character opening stages.',
     privacyTab: 'Privacy',
     mimo: 'Xiaomi MiMo TTS',
     byok: 'Custom speech API (BYOK)',
@@ -227,7 +228,7 @@ const UI = {
     playbackTab: '播放设置',
     academicTab: '学术阅读',
     rapidStart: '极速起读',
-    rapidStartDesc: '首个完整句子为 5–19 字时优先起读，否则使用常规 20/40 字起读门槛。仅在播放到对应音频小段时请求合成。',
+    rapidStartDesc: '首个完整句子为 5–19 字时优先起读，否则使用常规 20/40 字起读门槛。',
     privacyTab: '隐私与帮助',
     mimo: '小米 MiMo TTS',
     byok: '自定义语音 API (BYOK)',
@@ -365,6 +366,14 @@ class NoteReaderMobilePlugin extends Plugin {
     this.addCommand({ id: 'read-pdf-footnotes', name: 'Read PDF footnotes only', callback: () => this.runSafely(() => this.readFootnotes()) });
     this.addCommand({ id: 'resume-file', name: 'Resume active file', callback: () => this.runSafely(() => this.resumeFile()) });
     this.addCommand({ id: 'toggle-pause', name: 'Pause or resume reading', callback: () => this.togglePause() });
+    this.addCommand({ id: 'copy-playback-timings', name: 'Copy playback waiting-time summary', callback: async () => {
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(this.playbackTimings?.snapshot() || {}, null, 2));
+        new Notice(this.settings.settingsLanguage === 'chinese' ? '已复制本地等待统计（不含正文或密钥）。' : 'Local timing summary copied (no text or keys).');
+      } catch {
+        new Notice(this.settings.settingsLanguage === 'chinese' ? '无法写入剪贴板，播放未受影响。' : 'Clipboard unavailable. Playback is unchanged.');
+      }
+    } });
     this.addCommand({ id: 'stop-reading', name: 'Stop reading', callback: () => this.stopReading() });
     this.addSettingTab(new NoteReaderMobileSettingTab(this.app, this));
     this.registerEvent(this.app.workspace.on('active-leaf-change', () => this.syncToolbar()));
@@ -1193,6 +1202,8 @@ class NoteReaderMobilePlugin extends Plugin {
     this.runId += 1;
     this.pauseRequested = false;
     this.queue = createPlaybackQueueState(items);
+    this.resetPreparation(true);
+    this.playbackTimings.begin('sessionToPlaying');
     this.sourceLabel = context.sourceLabel || '';
     this.statusDetail = '';
     this.phaseOverride = '';
@@ -1206,6 +1217,8 @@ class NoteReaderMobilePlugin extends Plugin {
     this.cancelActivePlayback();
     this.sessionId += 1;
     this.runId += 1;
+    this.resetPreparation();
+    this.extractionStarted = this.playbackTimings.now();
     this.pauseRequested = false;
     this.queue = createPlaybackQueueState();
     this.phaseOverride = status;
@@ -1272,6 +1285,11 @@ class NoteReaderMobilePlugin extends Plugin {
       utterance.voice = voice;
     }
     this.activeUtterance = utterance;
+    this.playbackTimings ||= new PlaybackTimings();
+    const loadingStarted = this.playbackTimings.now();
+    utterance.onstart = () => {
+      if (sessionId === this.sessionId && runId === this.runId) this.playbackTimings.playing(loadingStarted);
+    };
     return new Promise((resolve, reject) => {
       let settled = false;
       const settle = (outcome, error) => {
@@ -1288,7 +1306,10 @@ class NoteReaderMobilePlugin extends Plugin {
         }
       };
       this.activePlaybackSettle = (outcome = 'cancelled') => settle(outcome);
-      utterance.onend = () => settle('ended');
+      utterance.onend = () => {
+        if (sessionId === this.sessionId && runId === this.runId) this.playbackTimings.ended();
+        settle('ended');
+      };
       utterance.onerror = (event) => {
         const code = String(event && event.error || 'speech error');
         if (code === 'canceled' || code === 'interrupted') {
@@ -1301,36 +1322,80 @@ class NoteReaderMobilePlugin extends Plugin {
     });
   }
 
-  async playOnlineParts(text, sessionId, runId) {
+  resetPreparation(completeExtraction = false) {
+    this.playbackTimings ||= new PlaybackTimings();
+    this.preparationPool ||= new PreparationPool({ timings: this.playbackTimings });
+    this.preparationPool.clear();
+    this.preparationPool.pause(false);
+    this.onlinePlans = new Map();
+    this.playbackTimings.suspend();
+    if (completeExtraction && this.extractionStarted != null) {
+      this.playbackTimings.record('extraction', this.playbackTimings.now() - this.extractionStarted);
+    }
+    this.extractionStarted = null;
+  }
+
+  onlinePlan(index, text = this.queue.items[index]?.text || '') {
+    this.onlinePlans ||= new Map();
+    if (this.onlinePlans.has(index)) return this.onlinePlans.get(index);
     const settings = this.sessionSpeechSettings || this.settings;
-    const opening = applyTerms(text, settings) === text ? splitOpeningAudioParts(text, this.settings.rapidStart === true) : [text];
-    const parts = opening.flatMap(value => fitSpeechParts(value, settings, this.settings.speechEngine === 'mimo' ? 200 : 800));
+    const opening = applyTerms(text, settings) === text ? splitOpeningAudioParts(text, settings.rapidStart === true) : [text];
+    const parts = opening.flatMap(value => fitSpeechParts(value, settings, settings.speechEngine === 'mimo' ? 200 : 800));
+    const plan = parts.map((part, partIndex) => ({ text: part.text, key: `${this.sessionId}:${index}:${partIndex}`,
+      context: adjacentContext(parts.map(entry => entry.source), partIndex,
+        this.queue.items[index - 1]?.text || '', this.queue.items[index + 1]?.text || '') }));
+    this.onlinePlans.set(index, plan);
+    return plan;
+  }
+
+  prepareOnlineAudio(part, sessionId, background = false) {
+    this.playbackTimings ||= new PlaybackTimings();
+    this.preparationPool ||= new PreparationPool({ timings: this.playbackTimings });
+    const pool = this.preparationPool;
+    if (!background) pool.select(part.key);
+    const snapshot = this.sessionSpeechSettings || this.settings;
+    const currentSettings = () => ({ ...this.settings, speechTerms: snapshot.speechTerms,
+      speechTermsEnabled: snapshot.speechTermsEnabled,
+      openRouterContext: snapshot.openRouterContext === true && this.settings.openRouterContext === true });
+    return pool.get(part.key, () => synthesizeOnlineChunk(part.text, currentSettings(), this.app, undefined, currentSettings, part.context), {
+      background,
+      valid: () => sessionId === this.sessionId && (!background || (this.settings.onlinePrefetch
+        && !this.pauseRequested && !(typeof document !== 'undefined' && document.hidden))),
+    });
+  }
+
+  async playOnlineParts(text, sessionId, runId) {
     const index = this.queue.currentIndex;
-    for (const [partIndex, part] of parts.entries()) {
+    const plan = this.onlinePlan(index, text);
+    for (const [partIndex, part] of plan.entries()) {
       await this.waitUntilResumed(sessionId, runId);
       if (sessionId !== this.sessionId || runId !== this.runId) return 'cancelled';
-      const context = adjacentContext(parts.map(entry => entry.source), partIndex,
-        this.queue.items[index - 1]?.text || '', this.queue.items[index + 1]?.text || '');
-      const outcome = await this.playOnlineChunk(part.text, sessionId, runId, context);
+      const prefetch = () => {
+        if (!this.settings.onlinePrefetch || this.pauseRequested || sessionId !== this.sessionId || runId !== this.runId
+          || (typeof document !== 'undefined' && document.hidden)) return;
+        const next = plan[partIndex + 1] || (this.queue.items[index + 1] && this.onlinePlan(index + 1)[0]);
+        if (next) this.prepareOnlineAudio(next, sessionId, true).catch(() => {});
+      };
+      const outcome = await this.playOnlineChunk(part.text, sessionId, runId, part.context, part.key, prefetch);
       if (outcome !== 'ended' || sessionId !== this.sessionId || runId !== this.runId) return 'cancelled';
     }
     return 'ended';
   }
 
-  async playOnlineChunk(text, sessionId, runId, context = {}) {
+  async playOnlineChunk(text, sessionId, runId, context = {}, key = `${sessionId}:direct:${text}`, prefetch = () => {}) {
     await this.waitUntilResumed(sessionId, runId);
     if (sessionId !== this.sessionId || runId !== this.runId) return 'cancelled';
     this.statusDetail = getUi(this.settings).synthesizing;
     this.phaseOverride = 'synthesizing';
     this.renderViews();
-    const snapshot = this.sessionSpeechSettings || this.settings;
-    const currentSettings = () => ({ ...this.settings, speechTerms: snapshot.speechTerms,
-      speechTermsEnabled: snapshot.speechTermsEnabled,
-      openRouterContext: snapshot.openRouterContext === true && this.settings.openRouterContext === true });
-    const audioData = await synthesizeOnlineChunk(text, currentSettings(), this.app, undefined, currentSettings, context);
+    const preparation = this.prepareOnlineAudio({ text, key, context }, sessionId);
+    const waitStarted = this.playbackTimings.now();
+    prefetch();
+    const audioData = await preparation;
     if (sessionId !== this.sessionId || runId !== this.runId) {
       return 'cancelled';
     }
+    this.playbackTimings.record('foregroundWait', this.playbackTimings.now() - waitStarted);
     await this.waitUntilResumed(sessionId, runId);
     if (sessionId !== this.sessionId || runId !== this.runId) {
       return 'cancelled';
@@ -1338,6 +1403,13 @@ class NoteReaderMobilePlugin extends Plugin {
     const blob = new Blob([audioData.arrayBuffer], { type: audioData.mimeType });
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
+    const loadingStarted = this.playbackTimings.now();
+    let measuredPlaying = false;
+    audio.onplaying = () => {
+      if (measuredPlaying || sessionId !== this.sessionId || runId !== this.runId) return;
+      measuredPlaying = true;
+      this.playbackTimings.playing(loadingStarted);
+    };
     audio.playbackRate = this.settings.speed;
     audio.volume = this.settings.volume ?? 1;
     audio.onloadedmetadata = audio.ontimeupdate = audio.ondurationchange = () => this.renderViews();
@@ -1363,7 +1435,10 @@ class NoteReaderMobilePlugin extends Plugin {
         }
       };
       this.activePlaybackSettle = (outcome = 'cancelled') => settle(outcome);
-      audio.onended = () => settle('ended');
+      audio.onended = () => {
+        if (measuredPlaying && sessionId === this.sessionId && runId === this.runId) this.playbackTimings.ended();
+        settle('ended');
+      };
       audio.onerror = () => settle('', new Error('The synthesized audio could not be played on this device.'));
       this.requestAudioPlayback(audio, (error) => {
         if (!settled && !this.pauseForBlockedAudio(error, audio)) {
@@ -1376,6 +1451,7 @@ class NoteReaderMobilePlugin extends Plugin {
   cleanupAudio() {
     this.playbackBlocked = false;
     if (this.activeAudio) {
+      this.activeAudio.onplaying = null;
       this.activeAudio.onended = this.activeAudio.onerror = this.activeAudio.onloadedmetadata = this.activeAudio.ontimeupdate = this.activeAudio.ondurationchange = null;
       this.activeAudio.pause();
       this.activeAudio.removeAttribute('src');
@@ -1430,6 +1506,8 @@ class NoteReaderMobilePlugin extends Plugin {
       return;
     }
     this.pauseRequested = true;
+    this.preparationPool?.pause(true);
+    this.playbackTimings?.suspend();
     this.queue = reducePlaybackQueueState(this.queue, { type: 'pause' });
     if (this.activeAudio) {
       this.activeAudio.pause();
@@ -1447,6 +1525,7 @@ class NoteReaderMobilePlugin extends Plugin {
     if (typeof document !== 'undefined' && document.hidden) return;
     this.pauseRequested = false;
     this.queue = reducePlaybackQueueState(this.queue, { type: 'resume' });
+    this.preparationPool?.pause(false);
     if (this.activeAudio) {
       const sessionId = this.sessionId;
       const runId = this.runId;
@@ -1496,6 +1575,9 @@ class NoteReaderMobilePlugin extends Plugin {
     this.cancelActivePlayback();
     this.pauseRequested = false;
     this.queue = reducePlaybackQueueState(this.queue, { type: 'select', index: target });
+    this.preparationPool?.select(this.onlinePlan(target)[0]?.key);
+    this.preparationPool?.pause(false);
+    this.playbackTimings?.begin('jumpToPlaying');
     this.renderViews();
     void this.runFromCurrent();
   }
@@ -1503,6 +1585,7 @@ class NoteReaderMobilePlugin extends Plugin {
   stopReading(options = {}) {
     this.sessionId += 1;
     this.runId += 1;
+    this.resetPreparation();
     this.cancelActivePlayback();
     this.pauseRequested = false;
     this.queue = createPlaybackQueueState();
@@ -1519,6 +1602,7 @@ class NoteReaderMobilePlugin extends Plugin {
     const message = error && error.message ? String(error.message) : String(error || 'Unknown error');
     this.sessionId += 1;
     this.runId += 1;
+    this.resetPreparation();
     this.cancelActivePlayback();
     this.phaseOverride = '';
     this.queue = reducePlaybackQueueState(this.queue, { type: 'fail', error: message });
@@ -1792,6 +1876,14 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
         this.plugin.settings.rapidStart = value;
         await this.plugin.saveSettings();
       }));
+    new Setting(containerEl).setName(this.plugin.settings.settingsLanguage === 'chinese' ? '提前准备下一小段' : 'Prepare the next audio part')
+      .setDesc(this.plugin.settings.settingsLanguage === 'chinese'
+        ? '默认关闭。开启后最多提前发送下一小段，最多两个合成请求同时进行；未收听的内容也可能计费。停止或换文档清除本次音频缓存。'
+        : 'Off by default. Prepare at most one upcoming part, with up to two synthesis requests in flight. Unplayed text may be billed. Stop or change documents to clear session audio.')
+      .addToggle(toggle => toggle.setValue(this.plugin.settings.onlinePrefetch).onChange(async value => {
+        this.plugin.settings.onlinePrefetch = value;
+        await this.plugin.saveSettings();
+      }));
     new Setting(containerEl)
       .setName(ui.chunks)
       .setDesc(ui.chunksDesc)
@@ -1872,6 +1964,9 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
     if (this.activeTab === 'privacy') {
     const label = (en, zh) => this.plugin.settings.settingsLanguage === 'chinese' ? zh : en;
     new Setting(containerEl).setName(ui.privacy).setDesc(ui.privacyDesc);
+    new Setting(containerEl).setName(label('Clear session audio', '清除本次音频缓存'))
+      .setDesc(label('Stop playback and release cached audio. Documents, exports, credentials and saved positions are kept.', '停止播放并释放音频缓存；保留文档、导出、凭据与续读记录。'))
+      .addButton(button => button.setButtonText(label('Clear audio', '清除音频')).onClick(() => this.plugin.stopReading({ quiet: true })));
     new Setting(containerEl).setName(label('Clear outline cache', '清除大纲缓存'))
       .setDesc(label('Release the in-memory outline and close its panel. Playback, saved positions and exported files are kept.', '释放内存中的大纲并关闭大纲面板；不影响播放、续读记录或导出文件。'))
       .addButton((button) => button.setButtonText(label('Clear cache', '清除缓存')).onClick(() => {

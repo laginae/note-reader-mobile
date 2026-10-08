@@ -1,13 +1,14 @@
 {
   "name": "note-reader-mobile",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": true,
   "description": "Mobile-first note, PDF and local HTML voice reader with academic reading tools and WAV export.",
   "license": "MIT",
   "scripts": {
     "build": "esbuild src/main.js --bundle --external:obsidian --platform=browser --format=cjs --target=es2020 --outfile=main.js --log-level=warning",
     "test": "npm run build && node --test test/*.test.cjs && npm run check:mobile",
-    "check:mobile": "node scripts/check-mobile-boundary.cjs"
+    "check:mobile": "node scripts/check-mobile-boundary.cjs",
+    "benchmark:playback": "node scripts/benchmark-playback.cjs"
   },
   "dependencies": {
     "@laginae/note-reader-core": "git+https://github.com/laginae/note-reader-core.git#42ab4760e88fd745bc239c1086d453bde89b1017",

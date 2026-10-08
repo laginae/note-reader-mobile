@@ -1,7 +1,7 @@
 {
   "id": "note-reader-mobile",
   "name": "Note and PDF Voice Reader for Mobile",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "minAppVersion": "1.11.4",
   "description": "Read notes, PDFs and local HTML aloud on mobile, with PDF outlines, footnote filtering and WAV export. Use device voices or optional online speech services.",
   "author": "Note and PDF Voice Reader Contributors",

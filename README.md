@@ -48,7 +48,7 @@ On phones, opening the reading bar temporarily keeps the current pane's native t
 - Device system speech with no text sent by the plugin to an online TTS service
 - Optional Xiaomi MiMo, Microsoft Azure Speech, OpenRouter TTS, HTTPS remote CosyVoice and a custom speech API (BYOK)
 - Touch-sized controls, vertical layouts, pause/resume, and chunk navigation
-- Online synthesis is strictly on demand: the plugin does not pre-synthesize future chunks
+- Online synthesis is on demand by default; optional one-part lookahead reduces gaps
 - Local online-audio playback speed, volume and seeking within the currently loaded audio
 - Categorized settings, academic text handling and progressive opening audio within logical chunks
 
@@ -118,6 +118,10 @@ The configured endpoint must use HTTPS and accept a JSON request:
 It must return MP3 or WAV bytes. If a remote secret is selected, it is sent as an `Authorization: Bearer` header.
 
 ## Playback and Limits
+
+**Session audio and continuity:** already prepared audio is reused within the same reading session (up to 64 parts / 16 MiB of cached audio bytes, excluding active responses and playback). In Playback settings, **Prepare the next audio part** is off by default. Enabling it permits one upcoming part to be synthesized alongside the current one, with at most two synthesis operations in flight. Future text may be sent and billed even if you never listen to it. Rapid jumps prioritize the latest queued target; sent requests cannot necessarily be cancelled and may still delay it. Pause prevents new queued work. Stop, changing documents or changing the voice/provider clears reusable session audio; exports and saved positions are untouched. Privacy settings also provide **Clear session audio**. No persistent audio cache is added.
+
+**Waiting-time diagnostics:** run **Copy playback waiting-time summary** to copy bounded numeric statistics from this plugin session. Nothing is uploaded or written to disk automatically; the report contains no text, paths, voices or keys. It measures preparation, queueing, foreground waiting and the browser's playback-start event, not physical speaker output. `sessionToPlaying` starts when the reading queue is ready, not at the original click; extraction, when measured, is separate. Paused time is excluded from jump/gap intent measurements. First-time synthesis and slow providers still require waiting. Developers can run `npm run benchmark:playback` for a network-free synthetic comparison, not a real-provider speed claim.
 
 Simple formulas such as `$z_{\mathrm d}$` are read as "z sub d". Font and spacing commands do not make a short formula complex; explicit skip settings and complex-formula safeguards still apply.
 
