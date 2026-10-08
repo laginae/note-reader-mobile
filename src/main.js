@@ -1,5 +1,6 @@
 'use strict';
 const { ELEVENLABS_MODELS } = require('./openrouter-elevenlabs');
+const { getOpenRouterPricing } = require('./openrouter-pricing');
 const { applyTerms, fitSpeechParts, adjacentContext } = require('./speech-options');
 const { addSpeechContextSetting, addSpeechTermsSettings } = require('./speech-options-settings');
 
@@ -1693,6 +1694,14 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
             this.display();
           });
         });
+      const price = getOpenRouterPricing(this.plugin.settings.openRouterModel, this.plugin.settings.settingsLanguage);
+      new Setting(containerEl).setName(price.name).setDesc(price.description)
+        .addButton(button => button.setButtonText(price.button).onClick(() => {
+          const url = getOpenRouterPricing(this.plugin.settings.openRouterModel, this.plugin.settings.settingsLanguage).url;
+          const opened = typeof window !== 'undefined' && typeof window.open === 'function'
+            && window.open(url, '_blank', 'noopener,noreferrer');
+          if (!opened) new Notice(url, 8000);
+        }));
       new Setting(containerEl)
         .setName(ui.voice)
         .addDropdown((dropdown) => {

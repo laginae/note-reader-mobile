@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const Module = require('node:module');
 const { normalizeSettings } = require('../src/config');
+const { getOpenRouterPricing } = require('../src/openrouter-pricing');
 const { createPlaybackQueueState } = require('@laginae/note-reader-core');
 const { grantByokConsent, normalizeByokProfile } = require('../src/byok');
 
@@ -129,6 +130,22 @@ test('ElevenLabs advanced options hide for unsupported models without discarding
   await row.input.change('invalid');
   assert.equal(plugin.settings.speechTerms, 'AI = artificial intelligence');
   assert.equal(row.input.inputEl.attrs['aria-invalid'], 'true');
+});
+
+test('OpenRouter settings show model-specific bilingual price references only for that engine', async () => {
+  for (const language of ['english', 'chinese']) {
+    const plugin = fixture({speechEngine:'openrouter', settingsLanguage:language, openRouterModel:'elevenlabs/eleven-v4'});
+    const tab = new loaded.__test.NoteReaderMobileSettingTab(plugin.app, plugin);
+    tab.display();
+    const priceRow = () => tab.containerEl.rows.find(row => tab.containerEl.all().includes(row.settingEl)
+      && row.name === getOpenRouterPricing('', language).name);
+    assert.equal(priceRow().desc, getOpenRouterPricing(plugin.settings.openRouterModel, language).description);
+    const modelRow = tab.containerEl.rows.find(row => row.input?.options['elevenlabs/eleven-v4']);
+    await modelRow.input.change('hexgrad/kokoro-82m');
+    assert.equal(priceRow().desc, getOpenRouterPricing('hexgrad/kokoro-82m', language).description);
+    plugin.settings.speechEngine = 'system'; tab.display();
+    assert.equal(priceRow(), undefined);
+  }
 });
 
 test('cache and position clearing are separate and preserve playback and credentials', async () => {
