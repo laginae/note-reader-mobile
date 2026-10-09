@@ -1,9 +1,9 @@
 {
   "id": "note-reader-mobile",
   "name": "Cozy Read Aloud Mobile",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "minAppVersion": "1.11.4",
-  "description": "Read notes, PDFs and local HTML aloud on mobile, with PDF outlines, footnote filtering and WAV export. Use device voices or optional online speech services.",
+  "description": "Read aloud notes, PDFs and local HTML on mobile, with flexible voice options, playback controls, document outlines and audio export.",
   "author": "Note and PDF Voice Reader Contributors",
   "authorUrl": "https://github.com/laginae/note-reader-mobile",
   "isDesktopOnly": false

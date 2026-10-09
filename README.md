@@ -4,6 +4,8 @@
 
 A mobile-first read-aloud companion for Markdown notes, text-based PDFs and local HTML files in Obsidian.
 
+**Formerly Note and PDF Voice Reader for Mobile.** Same plugin, new name. Your settings and update path remain unchanged; no reinstall is required.
+
 **0.3.1 is an early mobile release.** An iPhone user has confirmed full-file reading, starting from selected text, pause/resume, Stop, speed adjustment and an unobstructed toolbar in their tested setup. The new outline, footnote, HTML and export workflows still need broader device testing. Complex PDFs may have layout-specific issues. This is a separate plugin and does not change the desktop edition.
 
 ## Highlights

@@ -1,5 +1,9 @@
 # Cozy Read Aloud Mobile
 
+Read aloud notes, PDFs and local HTML on mobile, with flexible voice options, playback controls, document outlines and audio export.
+
+**Formerly Note and PDF Voice Reader for Mobile.** Same plugin, new name. Your settings and update path remain unchanged; no reinstall is required.
+
 Listen to Markdown notes, text-based PDFs and local HTML files without leaving your mobile reading workflow. Use device system voices, or opt in to Xiaomi MiMo, Azure Speech, OpenRouter, remote CosyVoice or a custom speech API.
 
 ## Reading on a phone or tablet
