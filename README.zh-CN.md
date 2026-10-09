@@ -1,4 +1,4 @@
-# Note and PDF Voice Reader for Mobile
+# Cozy Read Aloud Mobile
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -24,7 +24,7 @@
 设置先选择“朗读方式”（系统语音、在线语音、自建服务），在线方式再选服务商，保留已有配置。配置好秘密与音色、确认在线处理授权后，可点“测试朗读”，只使用固定短句，不读取笔记；在线测试可能计费。“停止测试”可取消试听，已有朗读或导出时不会抢占播放。移动端自建服务是连接你的 HTTPS 接口，不是在手机上运行本地模型。分段与预取参数收在播放页的高级选项中。
 
 1. 使用 Obsidian 1.11.4 或更高版本，并先备份仓库。
-2. 打开 **设置 → 第三方插件 → 浏览**，搜索 **Note and PDF Voice Reader for Mobile**。
+2. 打开 **设置 → 第三方插件 → 浏览**，搜索 **Cozy Read Aloud Mobile**。
 3. 点击 **安装**，然后 **启用**。也可以打开[社区介绍页面](https://community.obsidian.md/plugins/note-reader-mobile)。
 4. 打开笔记或 PDF，点击朗读图标显示播放工具栏。
 5. 先尝试系统语音；也可以在插件设置中配置在线服务的秘密，并明确允许在线处理。

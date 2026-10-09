@@ -1,4 +1,4 @@
-# Note and PDF Voice Reader for Mobile
+# Cozy Read Aloud Mobile
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -24,7 +24,7 @@ Playback settings offer independent switches for the editor reading menu and the
 Settings separate **Reading method** (System speech / Online speech / Self-hosted service) from the online provider. Existing configurations are preserved. Configure the secret and voice, review the processing permission, then use **Test voice** for a fixed sample that never reads your notes. Online tests may incur charges. **Stop test** cancels the test; it does not replace an ongoing reading or export. Self-hosted speech uses your HTTPS endpoint, not a model running on the phone. Advanced chunk and prefetch controls are collapsed in Playback settings.
 
 1. Use Obsidian 1.11.4 or later and back up your vault.
-2. Open **Settings → Community plugins → Browse** and search for **Note and PDF Voice Reader for Mobile**.
+2. Open **Settings → Community plugins → Browse** and search for **Cozy Read Aloud Mobile**.
 3. Select **Install**, then **Enable**. You can also open the [community listing](https://community.obsidian.md/plugins/note-reader-mobile).
 4. Open a note or PDF and tap the reader icon to show the playback toolbar.
 5. Start with device system speech, or choose an online engine in the plugin settings and explicitly enable processing after configuring its secret.

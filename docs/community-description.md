@@ -1,4 +1,4 @@
-# Note and PDF Voice Reader for Mobile
+# Cozy Read Aloud Mobile
 
 Listen to Markdown notes, text-based PDFs and local HTML files without leaving your mobile reading workflow. Use device system voices, or opt in to Xiaomi MiMo, Azure Speech, OpenRouter, remote CosyVoice or a custom speech API.
 

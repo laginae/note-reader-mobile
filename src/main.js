@@ -59,7 +59,7 @@ const SPEED_PRESETS = [1, 1.25, 1.5, 2];
 
 const UI = {
   english: {
-    title: 'Note Reader Mobile',
+    title: 'Cozy Read Aloud Mobile',
     toolbar: 'Reading toolbar',
     openPanel: 'Expand player',
     backToText: 'Back to document',
@@ -325,7 +325,7 @@ class NoteReaderMobileView extends ItemView {
   }
 
   getDisplayText() {
-    return 'Note and PDF Voice Reader';
+    return 'Cozy Read Aloud Mobile';
   }
 
   getIcon() {

@@ -138,7 +138,7 @@ async function synthesizeOpenRouter(text, settings, app, requestFn, context = {}
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': 'https://github.com/laginae/note-reader-mobile',
-      'X-Title': 'Note and PDF Voice Reader Mobile',
+      'X-Title': 'Cozy Read Aloud Mobile',
     },
     body: JSON.stringify(buildOpenRouterRequestBody(text, settings, context)),
   }, 'OpenRouter TTS', requestFn);
