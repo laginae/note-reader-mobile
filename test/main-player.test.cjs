@@ -186,8 +186,7 @@ test('Markdown outline loads, locates without starting playback, and reads only 
 
 test('PDF navigation uses page coordinates when available and a page link otherwise', async () => {
   const plugin = fixture(); const leaf = sourceFixture(plugin, 'pdf');
-  const { outlineKey } = require('../src/pdf-outline');
-  const key = outlineKey(leaf.view.file, plugin.settings.pdfSkipHeaders);
+  const key = plugin.documentOutlineKey(leaf.view.file);
   const data = { entries: [{ page: 2, offset: 0 }], pages: [{ pageNumber: 2, layout: { lines: [{ offset: 0, y: 500, xMin: 40 }] } }] };
   let destination; leaf.view.viewer = { child: { pdfViewer: { scrollPageIntoView: (v) => { destination = v; } } } };
   await plugin.locateOutlineEntry(leaf.view.file, key, data, 0);
@@ -650,17 +649,25 @@ test('PDF header filter has bilingual academic settings and changes only the nex
   }
 });
 
-test('PDF selection-only reading bypasses header filtering', async () => {
+test('PDF selection-only reading checks local font data without filtering selected headers', async () => {
   const plugin = fixture({ pdfSkipHeaders: true });
   sourceFixture(plugin, 'pdf');
   plugin.getSelectedText = () => 'A. Researcher et al.';
   plugin.getSelectionSnapshot = () => ({ pageNumber: 2 });
+  plugin.app.vault.readBinary = async () => new ArrayBuffer(4);
+  const calls = [];
+  pdfLoader = async () => ({ getDocument: () => ({ promise: Promise.resolve({ numPages: 4,
+    getPage: async number => { calls.push(number); return {
+      getTextContent: async () => ({ items: [{ str: 'A. Researcher et al.', width: 150, height: 10, transform: [10,0,0,10,40,775] }] }),
+      getViewport: () => ({ width: 600, height: 800 }), cleanup() {},
+    }; }, destroy() {},
+  }) }) });
   let result;
   plugin.startTextSession = (text, context) => { result = { text, context }; };
-  plugin.readPdf = async () => { throw new Error('Selection must not re-extract the PDF'); };
   await plugin.readSelection();
   assert.equal(result.text, 'A. Researcher et al.');
   assert.equal(result.context.pageNumber, 2);
+  assert.deepEqual(calls, [1, 2]);
 });
 
 test('PDF anchors use filtered body or the original first page when an explicit edge anchor was removed', () => {
@@ -677,6 +684,45 @@ test('PDF anchors use filtered body or the original first page when an explicit 
   assert.ok(edgeStart.startsWith(header));
   assert.equal(edgeStart.split(header).length - 1, 1);
   assert.match(edgeStart, /Later filtered body/);
+});
+
+test('PDF selection extraction never starts playback after Stop or a source change', async () => {
+  for (const action of ['stop', 'change']) {
+    const plugin = fixture(); const source = sourceFixture(plugin, 'pdf');
+    plugin.getSelectedText = () => 'Only selected words.';
+    plugin.getSelectionSnapshot = () => ({ pageNumber: 1 });
+    let resolve, started = false, failed = false, destroyed = false;
+    plugin.app.vault.readBinary = () => new Promise(done => { resolve = done; });
+    pdfLoader = async () => ({ getDocument: () => ({ promise: Promise.resolve({ numPages: 1,
+      getPage: async () => ({ getTextContent: async () => ({ items: [{ str: 'Only selected words.', width: 200, height: 10, transform: [10,0,0,10,40,700] }] }), cleanup() {} }),
+      destroy() { destroyed = true; },
+    }) }) });
+    plugin.startTextSession = () => { started = true; };
+    plugin.fail = () => { failed = true; };
+    const pending = plugin.readSelection();
+    if (action === 'stop') plugin.sessionId++;
+    else source.view.file.stat.mtime++;
+    resolve(new ArrayBuffer(4)); await pending;
+    assert.equal(started, false); assert.equal(destroyed, true);
+    assert.equal(failed, action === 'change');
+  }
+});
+
+test('PDF selection refuses ambiguous text before speech and preserves raw mode', async () => {
+  const plugin = fixture(); sourceFixture(plugin, 'pdf');
+  plugin.getSelectedText = () => 'Repeated words.';
+  plugin.getSelectionSnapshot = () => ({ pageNumber: 1 });
+  plugin.app.vault.readBinary = async () => new ArrayBuffer(4);
+  pdfLoader = async () => ({ getDocument: () => ({ promise: Promise.resolve({ numPages: 1,
+    getPage: async () => ({ getTextContent: async () => ({ items: [{ str: 'Repeated words. Repeated words.', width: 250, height: 10, transform: [10,0,0,10,40,700] }] }), cleanup() {} }), destroy() {},
+  }) }) });
+  let started = '', failed = false;
+  plugin.startTextSession = text => { started = text; };
+  plugin.fail = () => { failed = true; };
+  await plugin.readSelection(); assert.equal(started, ''); assert.equal(failed, true);
+  plugin.settings.stripMarkdown = false;
+  plugin.app.vault.readBinary = () => { throw new Error('Raw selection should not re-extract'); };
+  await plugin.readSelection(); assert.equal(started, 'Repeated words.');
 });
 
 test('PDF footnote modes affect playback chunks but not plain selection reading', async () => {
@@ -712,7 +758,9 @@ test('PDF outline is cached in memory, invalidates on source/filter changes, and
   await plugin.loadPdfOutline(source.view.file, () => false, () => {}); assert.equal(reads, 3);
   plugin.settings.pdfSkipHeaders = false;
   await plugin.loadPdfOutline(source.view.file, () => false, () => {}); assert.equal(reads, 4);
-  assert.equal(destroyed, 4); assert.equal(plugin.saved.length, 0);
+  plugin.settings.academicMathMode = 'skip';
+  await plugin.loadPdfOutline(source.view.file, () => false, () => {}); assert.equal(reads, 5);
+  assert.equal(destroyed, 5); assert.equal(plugin.saved.length, 0);
 });
 
 test('outline modal is searchable, closes during loading, and ignores late results without interrupting playback', async () => {

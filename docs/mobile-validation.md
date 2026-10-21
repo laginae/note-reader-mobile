@@ -1,5 +1,11 @@
 # Mobile Device Validation
 
+## 0.3.11 PDF Update
+
+Automated checks cover damaged embedded math fonts, ordinary multilingual text, short operators, complex formula blocks, bounded selected-text reading, cancellation, source changes and outline-cache invalidation. Original PDF text and coordinates are retained. No private documents or paid speech requests were used for this update's tests. Real iPhone/iPad/Android verification of these changes is pending; earlier user reports below do not validate this release.
+
+On a non-private test PDF, compare full-file, selected-text and outline-section reading with smart/all/skip modes and omission notices on/off. Include partial and multi-page selections, normal multilingual text, and Stop while extracting. An ambiguous selection must request reselection instead of reading outside its scope.
+
 Version: 0.3.0. Status: **basic iPhone workflow confirmed by a user; new features and broader device coverage pending**. On 2026-10-07, the user explicitly confirmed full-file reading, starting from selected text, pause/resume, Stop, speed adjustment and a toolbar no longer obscured in their iPhone setup. Exact device/OS versions were not provided. This is user-reported validation of the prior basic workflow, not a claim that all 0.3.0 additions passed device tests.
 
 Initial iOS feedback identified panel-exit and selection problems in 0.2.0, bottom-navigation overlap in 0.2.1, and status/header overlap in 0.2.2. Complex PDFs may still have issues. iPad, Android, other themes and the new outline/footnote/HTML/export workflows remain pending.

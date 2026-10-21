@@ -1,7 +1,7 @@
 {
   "id": "note-reader-mobile",
   "name": "Cozy Read Aloud Mobile",
-  "version": "0.3.10",
+  "version": "0.3.11",
   "minAppVersion": "1.11.4",
   "description": "Read aloud notes, PDFs and local HTML on mobile, with flexible voice options, playback controls, document outlines and audio export.",
   "author": "Note and PDF Voice Reader Contributors",

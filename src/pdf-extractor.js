@@ -4,6 +4,7 @@ const { extractPdfTextLayout } = require('@laginae/note-reader-core');
 const { edgeCandidates, recurringEdges, filterPageHeaders } = require('./pdf-headers');
 const { outlineLayout, resolvePdfBookmarks } = require('./pdf-outline');
 const { markFootnotes } = require('./pdf-footnotes');
+const { pdfMathChanges, pdfFontNames } = require('./pdf-speech/pdf-math');
 
 const PDF_MAX_BYTES = 200 * 1024 * 1024;
 const PDF_MAX_PAGES = 2000;
@@ -49,6 +50,8 @@ async function extractPdfDocument(app, file, options = {}) {
 
     const requestedStart = Math.floor(Number(options.startPageNumber) || 1);
     const startPageNumber = Math.max(1, Math.min(totalPages, requestedStart));
+    const endPageNumber = Math.max(startPageNumber, Math.min(totalPages, Math.floor(Number(options.endPageNumber) || totalPages)));
+    const encodingContext = new Set();
     const pages = [];
     const samples = [];
     let textLength = 0;
@@ -60,15 +63,17 @@ async function extractPdfDocument(app, file, options = {}) {
         const content = await page.getTextContent();
         const viewport = page.getViewport?.({ scale: 1 });
         let layout = extractPdfTextLayout(content?.items, { viewport });
+        const mathChanges = options.mathSettings ? pdfMathChanges(layout, content?.items || [],
+          options.mathSettings, pdfFontNames(page, content?.items || []), encodingContext) : [];
         if (options.includeOutline) layout = outlineLayout(layout, content?.items, content?.styles, viewport);
         layout = markFootnotes(layout, content?.items, viewport, pageNumber);
-        return { layout, pageNumber, text: layout.text, totalPages,
+        return { layout, pageNumber, text: layout.text, totalPages, mathChanges,
           edgeCandidates: options.skipHeaders !== false ? edgeCandidates(layout, content?.items, viewport) : [] };
       } finally { page?.cleanup?.(); }
     }
 
     // Bounded local look-behind also recognizes running headers when resuming near the end.
-    if (options.skipHeaders !== false) {
+    if (options.skipHeaders !== false || options.mathSettings) {
       for (let number = Math.max(1, startPageNumber - 3); number < startPageNumber; number += 1) {
         if (options.isCancelled?.()) return { pages: [], bookmarks: [] };
         try {
@@ -78,7 +83,7 @@ async function extractPdfDocument(app, file, options = {}) {
       }
     }
 
-    for (let pageNumber = startPageNumber; pageNumber <= totalPages; pageNumber += 1) {
+    for (let pageNumber = startPageNumber; pageNumber <= endPageNumber; pageNumber += 1) {
       if (typeof options.isCancelled === 'function' && options.isCancelled()) {
         return { pages: [], bookmarks: [] };
       }

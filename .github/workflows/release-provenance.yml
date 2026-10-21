@@ -1,0 +1,62 @@
+name: Verify and attest release assets
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-provenance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.15.0'
+      - name: Validate release source
+        id: version
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION=$(node -p 'require("./manifest.json").version')
+          if [ -n "$EVENT_TAG" ] && [ "$EVENT_TAG" != "$VERSION" ]; then exit 1; fi
+          git diff --exit-code "$VERSION" HEAD -- src package.json package-lock.json manifest.json styles.css
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Install, build and test
+        run: |
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+          npm ci
+          npm test
+      - name: Verify release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          gh release download "$RELEASE_TAG" --repo "$REPOSITORY" --dir published --pattern main.js --pattern manifest.json --pattern styles.css
+          for file in main.js manifest.json styles.css; do
+            cmp "$file" "published/$file"
+            sha256sum "$file" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Attest verified build
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css

@@ -12,9 +12,13 @@ assert.equal(manifest.version, lock.version);
 assert.equal(manifest.version, lock.packages[''].version);
 assert.match(lock.packages['node_modules/@laginae/note-reader-core'].resolved, /^git\+https:\/\/github\.com\/laginae\/note-reader-core\.git#[a-f0-9]{40}$/);
 
-const files = fs.readdirSync(path.join(root, 'src'))
-  .filter((name) => name.endsWith('.js'))
-  .map((name) => path.join(root, 'src', name));
+function sources(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const target = path.join(dir, entry.name);
+    return entry.isDirectory() ? sources(target) : entry.name.endsWith('.js') ? [target] : [];
+  });
+}
+const files = sources(path.join(root, 'src'));
 files.push(path.join(root, 'main.js'));
 
 const forbidden = [

@@ -44,6 +44,7 @@ const {
   normalizeSettings,
 } = require('./config');
 const { extractPdfPages, extractPdfDocument } = require('./pdf-extractor');
+const { preparePdfSpeech, preparePdfSelection } = require('./pdf-speech');
 const { buildPdfOutline, sectionPages, outlineKey } = require('./pdf-outline');
 const { PdfOutlineModal } = require('./pdf-outline-ui');
 const { markdownOutline, htmlOutline, sectionText } = require('./document-outline');
@@ -290,7 +291,15 @@ function getWindowSelectionContext() {
       break;
     }
   }
-  return { pageNumber, text };
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  const pageAt = node => {
+    const element = node?.nodeType === 1 ? node : node?.parentElement;
+    const page = element?.closest?.('[data-page-number], .pdf-page, .page');
+    return Number(page?.getAttribute?.('data-page-number')) || pageNumber;
+  };
+  const start = range ? pageAt(range.startContainer) : pageNumber;
+  const end = range ? pageAt(range.endContainer) : pageNumber;
+  return { pageNumber: Math.min(start, end), endPageNumber: Math.max(start, end), text };
 }
 
 function createButton(parent, options) {
@@ -862,6 +871,26 @@ class NoteReaderMobilePlugin extends Plugin {
       return;
     }
     const file = this.getActiveFile();
+    if (String(file?.extension).toLowerCase() === 'pdf' && this.settings.stripMarkdown) {
+      const selected = this.getSelectionSnapshot();
+      const pageNumber = selected?.pageNumber || 1;
+      const mtime = file.stat?.mtime;
+      const operationId = this.beginOperation('extracting');
+      try {
+        const pages = await extractPdfPages(this.app, file, {
+          loadPdfJs, startPageNumber: pageNumber, endPageNumber: selected?.endPageNumber || pageNumber,
+          skipHeaders: false, mathSettings: academicOptions(this.settings),
+          isCancelled: () => operationId !== this.sessionId,
+        });
+        if (operationId !== this.sessionId) return;
+        if (this.getActiveFile() !== file || file.stat?.mtime !== mtime) throw new Error('PDF changed. Select the text again.');
+        const prepared = preparePdfSelection(text, pages);
+        if (prepared === null) throw new Error(this.settings.settingsLanguage === 'chinese'
+          ? '无法准确定位 PDF 选区，请重新选择文字。' : 'Could not locate the PDF selection reliably. Select the text again.');
+        this.startTextSession(prepared, { file, kind: 'pdf', pageNumber, sourceLabel: ui.sourceSelection });
+      } catch (error) { if (operationId === this.sessionId) this.fail(error); }
+      return;
+    }
     this.startTextSession(text, {
       file,
       kind: file && String(file.extension).toLowerCase() === 'pdf' ? 'pdf' : 'markdown',
@@ -1038,6 +1067,7 @@ class NoteReaderMobilePlugin extends Plugin {
     }
     const result = await extractPdfDocument(this.app, file, {
       loadPdfJs, includeOutline: true, skipHeaders: this.settings.pdfSkipHeaders, isCancelled, onProgress,
+      mathSettings: this.settings.stripMarkdown ? academicOptions(this.settings) : null,
     });
     if (isCancelled()) return null;
     if (!this.isOutlineCurrent(file, key)) throw new Error('PDF or settings changed.');
@@ -1053,7 +1083,8 @@ class NoteReaderMobilePlugin extends Plugin {
 
   documentOutlineKey(file) {
     const key = outlineKey(file, this.settings.pdfSkipHeaders);
-    return isHtmlFile(file) ? JSON.stringify([key, this.settings.stripMarkdown, academicOptions(this.settings)]) : key;
+    return isHtmlFile(file) || String(file.extension).toLowerCase() === 'pdf'
+      ? JSON.stringify([key, this.settings.stripMarkdown, academicOptions(this.settings)]) : key;
   }
 
   readPdfSection(file, key, data, index, remaining) {
@@ -1132,7 +1163,7 @@ class NoteReaderMobilePlugin extends Plugin {
         const parts = splitFootnotesInRange(text, page.layout?.lines.filter((line) => line.footnote) || []);
         text = mode === 'footnotes' ? parts.notes : parts.body;
       }
-      const clean = this.prepareText(text);
+      const clean = this.prepareText(this.settings.stripMarkdown ? preparePdfSpeech(text, page) : text);
       chunks.push(...chunker.push(clean, { pageNumber: page.pageNumber }));
     });
     chunks.push(...chunker.finish());
@@ -1147,6 +1178,7 @@ class NoteReaderMobilePlugin extends Plugin {
         loadPdfJs,
         startPageNumber: context.startPageNumber,
         skipHeaders: this.settings.pdfSkipHeaders,
+        mathSettings: this.settings.stripMarkdown ? academicOptions(this.settings) : null,
         isCancelled: () => operationId !== this.sessionId,
         onProgress: ({ pageNumber, totalPages }) => {
           this.statusDetail = `${ui.extracting} ${pageNumber}/${totalPages}`;
