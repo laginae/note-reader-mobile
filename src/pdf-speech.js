@@ -57,7 +57,13 @@ function applyRange(text, page) {
   let result = '', cursor = range.start;
   for (const edit of edits) {
     if (edit.start < cursor) continue;
-    result += source.slice(cursor, edit.start) + edit.text;
+    result += source.slice(cursor, edit.start);
+    let spoken = edit.text;
+    if (/^\s*[.。]/.test(spoken)) {
+      result = result.trimEnd();
+      if (!result) spoken = spoken.replace(/^\s*[.。]\s*/, '');
+    }
+    result += spoken;
     cursor = edit.end;
   }
   return (result + source.slice(cursor, range.end)).replace(/[ \t]+/g, ' ').trim();
