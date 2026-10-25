@@ -27,11 +27,11 @@ const {
   parseChunkLimits,
   reducePlaybackQueueState,
   academicOptions,
-  sanitizeAcademicTextForSpeech,
   splitOpeningAudioParts,
   sliceTextFromReadingPosition,
   upsertReadingPosition,
 } = require('@laginae/note-reader-core');
+const { sanitizeAcademicTextForSpeech } = require('./speech-text');
 const { createIncrementalSpeechChunker, splitTextForSpeechChunks } = require('./sentence-chunker');
 const {
   DEFAULT_SETTINGS,

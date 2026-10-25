@@ -620,7 +620,10 @@ test('mobile preview uses only a fixed chunk, suppresses term substitutions and 
 test('academic reading uses core opt-in settings only when Markdown stripping is enabled', () => {
   const plugin = fixture();
   assert.match(plugin.prepareText('研究[2][4]。 $x_i$'), /文献2和4/);
-  assert.match(plugin.prepareText('$x_i$'), /sub/);
+  assert.equal(plugin.prepareText('$x_i$'), 'x i');
+  plugin.settings.academicMathStyle = 'verbose';
+  assert.match(plugin.prepareText('$x_i$'), /subscript|下标/);
+  plugin.settings.academicMathStyle = 'concise';
   plugin.settings.stripMarkdown = false;
   assert.equal(plugin.prepareText('研究[2][4]。 $x_i$'), '研究[2][4]。 $x_i$');
   const tab = new loaded.__test.NoteReaderMobileSettingTab(plugin.app, plugin);
