@@ -1,5 +1,7 @@
 'use strict';
 const { PlaybackTimings, PreparationPool } = require('./preparation-pool');
+const { BackgroundAudioControls, mayPlayHidden } = require('./background-audio');
+const { audioCacheKey, deviceCacheFor, addDeviceCacheSettings, startDeviceCacheMaintenance } = require('./device-audio-cache');
 const { ELEVENLABS_MODELS } = require('./openrouter-elevenlabs');
 const { getOpenRouterPricing } = require('./openrouter-pricing');
 const { disclosure, renderEngineChoice, renderPreview } = require('./engine-setup');
@@ -51,7 +53,7 @@ const { markdownOutline, htmlOutline, sectionText } = require('./document-outlin
 const { normalizeFootnoteMode, splitFootnotesInRange } = require('./pdf-footnotes');
 const { MAX_HTML_BYTES, isHtmlFile, extractHtmlText, extractHtmlTree, htmlReaderDocument, captureHtmlSelection } = require('./html-text');
 const { AudioExportModal } = require('./audio-export-ui');
-const { synthesizeOnlineChunk } = require('./speech-services');
+const { synthesizeOnlineChunk, onlineConfiguration } = require('./speech-services');
 const { BYOK_PROVIDERS, updateByokProfile, hasByokConsent, grantByokConsent, getByokConfigurationError } = require('./byok');
 
 const VIEW_TYPE = 'note-reader-mobile-control';
@@ -349,6 +351,7 @@ class NoteReaderMobileView extends ItemView {
 class NoteReaderMobilePlugin extends Plugin {
   async onload() {
     this.settings = normalizeSettings(await this.loadData());
+    startDeviceCacheMaintenance(this);
     registerReadingMenu(this, snapshot => this.runSafely(() => this.startTextSession(snapshot.text, {
       file: snapshot.file, kind: 'markdown', sourceLabel: snapshot.file.basename || snapshot.file.name,
     })), message => new Notice(message));
@@ -365,6 +368,8 @@ class NoteReaderMobilePlugin extends Plugin {
     this.activePlaybackSettle = null;
     this.pauseRequested = false;
     this.resumeWaiters = [];
+    this.backgroundControls = new BackgroundAudioControls(this);
+    this.register(() => this.backgroundControls.dispose());
     this.lastSpeechConfiguration = this.speechConfigurationKey();
 
     this.registerView(VIEW_TYPE, (leaf) => new NoteReaderMobileView(leaf, this));
@@ -422,9 +427,10 @@ class NoteReaderMobilePlugin extends Plugin {
       }
     });
     this.registerDomEvent(document, 'visibilitychange', () => {
-      if (document.hidden && this.queue.items.length) {
+      if (document.hidden && this.queue.items.length && !mayPlayHidden(this.settings)) {
         this.pauseReading();
       }
+      if (!document.hidden) this.renderViews();
     });
   }
 
@@ -440,6 +446,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   async saveSettings() {
+    if (this.deviceAudioCache && !this.settings.persistentAudioCache) await this.deviceAudioCache.clear().catch(() => {});
     this.settings = normalizeSettings(this.settings);
     const configuration = this.speechConfigurationKey();
     if (this.lastSpeechConfiguration && configuration !== this.lastSpeechConfiguration) this.stopReading({ quiet: true });
@@ -450,7 +457,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   speechConfigurationKey() {
-    const { readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
+    const { persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
     return JSON.stringify(speech);
   }
 
@@ -653,6 +660,8 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   renderViews() {
+    this.backgroundControls?.update();
+    if (typeof document !== 'undefined' && document.hidden) return;
     this.syncToolbar();
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
       if (leaf.view && leaf.view.contentEl) {
@@ -1418,10 +1427,27 @@ class NoteReaderMobilePlugin extends Plugin {
     const currentSettings = () => ({ ...this.settings, speechTerms: snapshot.speechTerms,
       speechTermsEnabled: snapshot.speechTermsEnabled,
       openRouterContext: snapshot.openRouterContext === true && this.settings.openRouterContext === true });
-    return pool.get(part.key, () => synthesizeOnlineChunk(part.text, currentSettings(), this.app, undefined, currentSettings, part.context), {
+    return pool.get(part.key, async () => {
+      const settings = currentSettings();
+      if (!settings.persistentAudioCache) return synthesizeOnlineChunk(part.text, settings, this.app, undefined, currentSettings, part.context);
+      const signature = onlineConfiguration(settings);
+      const prefix = settings.speechEngine === 'remote-cosyvoice' ? 'remote' : settings.speechEngine === 'openrouter' ? 'openRouter' : settings.speechEngine;
+      const allowed = settings.speechEngine === 'byok' ? hasByokConsent(settings.byokProfile) : settings[prefix + 'Consent'] === true;
+      if (!allowed) throw new Error('Online speech permission is required.');
+      const cache = deviceCacheFor(this), token = cache.token();
+      let key;
+      try { key = await audioCacheKey(part.text, {...settings,speed:1}, part.context); } catch {}
+      const cached = await cache.get(key);
+      if (sessionId !== this.sessionId || signature !== onlineConfiguration(currentSettings())) throw new Error('Speech configuration changed.');
+      if (cached) { this.playbackTimings.count('deviceCacheHit'); return cached; }
+      this.playbackTimings.count('deviceCacheMiss');
+      const audio = await synthesizeOnlineChunk(part.text, settings, this.app, undefined, currentSettings, part.context);
+      if (sessionId === this.sessionId) void cache.put(key, audio, token);
+      return audio;
+    }, {
       background,
       valid: () => sessionId === this.sessionId && (!background || (this.settings.onlinePrefetch
-        && !this.pauseRequested && !(typeof document !== 'undefined' && document.hidden))),
+        && !this.pauseRequested && !(typeof document !== 'undefined' && document.hidden && !mayPlayHidden(this.settings)))),
     });
   }
 
@@ -1433,7 +1459,7 @@ class NoteReaderMobilePlugin extends Plugin {
       if (sessionId !== this.sessionId || runId !== this.runId) return 'cancelled';
       const prefetch = () => {
         if (!this.settings.onlinePrefetch || this.pauseRequested || sessionId !== this.sessionId || runId !== this.runId
-          || (typeof document !== 'undefined' && document.hidden)) return;
+          || (typeof document !== 'undefined' && document.hidden && !mayPlayHidden(this.settings))) return;
         const next = plan[partIndex + 1] || (this.queue.items[index + 1] && this.onlinePlan(index + 1)[0]);
         if (next) this.prepareOnlineAudio(next, sessionId, true).catch(() => {});
       };
@@ -1549,7 +1575,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   async waitUntilResumed(sessionId, runId) {
-    if (typeof document !== 'undefined' && document.hidden && sessionId === this.sessionId && runId === this.runId) {
+    if (typeof document !== 'undefined' && document.hidden && !mayPlayHidden(this.settings) && sessionId === this.sessionId && runId === this.runId) {
       this.pauseReading();
     }
     while (this.pauseRequested && sessionId === this.sessionId && runId === this.runId) {
@@ -1583,7 +1609,7 @@ class NoteReaderMobilePlugin extends Plugin {
     if (!this.pauseRequested) {
       return;
     }
-    if (typeof document !== 'undefined' && document.hidden) return;
+    if (typeof document !== 'undefined' && document.hidden && !mayPlayHidden(this.settings)) return;
     this.pauseRequested = false;
     this.queue = reducePlaybackQueueState(this.queue, { type: 'resume' });
     this.preparationPool?.pause(false);
@@ -1922,6 +1948,16 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
       }));
     if (this.plugin.settings.speechEngine === 'system') containerEl.createEl('p', { cls: 'setting-item-description', text: ui.systemControls });
     const playbackAdvanced = disclosure(containerEl, languageIndex === 2 ? '高级选项' : 'Advanced options');
+    new Setting(playbackAdvanced).setName(languageIndex === 2 ? '后台纯音频（实验性）' : 'Background audio only (experimental)')
+      .setDesc(languageIndex === 2
+        ? '默认关闭。在线或自建语音在切到后台时尝试继续播放，并提供系统媒体控制；不显示文档名或正文。iOS 可能仍会挂起应用，不能保证锁屏连续播放；系统语音仍会暂停。'
+        : 'Off by default. Try continuing online/self-hosted audio in the background with system media controls. No note titles or text on the lock screen. iOS may still suspend the app; uninterrupted background playback is not guaranteed. System speech still pauses.')
+      .addToggle(toggle => toggle.setValue(this.plugin.settings.backgroundAudio).onChange(async value => {
+        this.plugin.settings.backgroundAudio = value;
+        await this.plugin.saveSettings();
+        if (!value && typeof document !== 'undefined' && document.hidden) this.plugin.pauseReading();
+        this.plugin.backgroundControls?.update();
+      }));
     new Setting(playbackAdvanced).setName(ui.rapidStart).setDesc(ui.rapidStartDesc)
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.rapidStart).onChange(async (value) => {
         this.plugin.settings.rapidStart = value;
@@ -2015,6 +2051,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
     if (this.activeTab === 'privacy') {
     const label = (en, zh) => this.plugin.settings.settingsLanguage === 'chinese' ? zh : en;
     new Setting(containerEl).setName(ui.privacy).setDesc(ui.privacyDesc);
+    addDeviceCacheSettings(containerEl, this.plugin, Setting, Notice);
     new Setting(containerEl).setName(label('Clear session audio', '清除本次音频缓存'))
       .setDesc(label('Stop playback and release cached audio. Documents, exports, credentials and saved positions are kept.', '停止播放并释放音频缓存；保留文档、导出、凭据与续读记录。'))
       .addButton(button => button.setButtonText(label('Clear audio', '清除音频')).onClick(() => this.plugin.stopReading({ quiet: true })));

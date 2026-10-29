@@ -68,7 +68,7 @@ try {
       loadPdfJs: (...args) => pdfLoader(...args),
       PluginSettingTab: class { constructor(app) { this.app = app; this.containerEl = new Element(); } },
       Setting, SecretComponent: Control, setIcon: (element, icon) => { element.icon = icon; } };
-    if (request === './speech-services') return { synthesizeOnlineChunk: (...args) => synthesize(...args) };
+    if (request === './speech-services') return { synthesizeOnlineChunk: (...args) => synthesize(...args), onlineConfiguration: settings => actualServices.onlineConfiguration(settings) };
     return originalLoad.call(this, request, parent, isMain);
   };
   loaded = require('../src/main');
@@ -93,6 +93,8 @@ test('reading menu and floating icon preferences do not interrupt playback', asy
   plugin.settings.readingContextMenu=false;
   plugin.settings.readingFloatingToolbar=true;
   plugin.settings.readingFloatingAction='from-selection';
+  plugin.settings.persistentAudioCache=true;
+  plugin.settings.backgroundAudio=true;
   await plugin.saveSettings();
   assert.equal(stops,0);
   assert.equal(plugin.saved.at(-1).readingFloatingAction,'from-selection');
@@ -1025,4 +1027,34 @@ test('system speech does not start while hidden and cancellation releases the wa
     plugin.stopReading({ quiet: true });
     assert.equal(await pending, 'cancelled');
   } finally { global.document = originalDocument; }
+});
+
+test('opted-in online background playback keeps running but default and system speech stay paused', async () => {
+  const oldDocument=global.document;global.document={hidden:true};
+  try {
+    const plugin=fixture({speechEngine:'mimo',backgroundAudio:true});
+    let calls=0;plugin.playOnlineChunk=async()=>{calls++;return 'ended';};
+    assert.equal(await plugin.playOnlineParts(multipartText,1,1),'ended');
+    assert.equal(calls,3);assert.equal(plugin.pauseRequested,false);
+    plugin.pauseRequested=true;plugin.resumeReading();assert.equal(plugin.pauseRequested,false);
+    const system=fixture({backgroundAudio:true});
+    const pending=system.playSystemChunk('Public example.');await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(system.pauseRequested,true);system.stopReading({quiet:true});assert.equal(await pending,'cancelled');
+  } finally {global.document=oldDocument;}
+});
+
+test('device cache avoids synthesis across sessions and cannot bypass consent', async () => {
+  const {DeviceAudioCache}=require('../src/device-audio-cache');
+  const plugin=fixture({speechEngine:'mimo',mimoConsent:true,persistentAudioCache:true});
+  const rows=new Map();let requests=0;
+  plugin.deviceAudioCache=new DeviceAudioCache({get:async key=>rows.get(key),put:async(key,value)=>rows.set(key,value),clear:async()=>rows.clear()},()=>true);
+  synthesize=async()=>{requests++;return {arrayBuffer:new ArrayBuffer(64),mimeType:'audio/wav'};};
+  await plugin.prepareOnlineAudio({text:'Public example.',key:'1:0:0',context:{}},1);
+  await new Promise(resolve=>setImmediate(resolve));
+  plugin.sessionId=2;plugin.resetPreparation();
+  await plugin.prepareOnlineAudio({text:'Public example.',key:'2:0:0',context:{}},2);
+  assert.equal(requests,1);assert.equal(plugin.playbackTimings.snapshot().counts.deviceCacheHit,1);
+  plugin.sessionId=3;plugin.resetPreparation();plugin.settings.mimoConsent=false;
+  await assert.rejects(plugin.prepareOnlineAudio({text:'Public example.',key:'3:0:0',context:{}},3),/permission/);
+  assert.equal(requests,1);
 });

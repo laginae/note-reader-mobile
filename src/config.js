@@ -112,6 +112,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   volume: 1,
   rapidStart: false,
   onlinePrefetch: false,
+  persistentAudioCache: false,
+  backgroundAudio: false,
   academicMathMode: 'smart',
   academicMathStyle: 'concise',
   academicTableMode: 'smart',
@@ -177,6 +179,8 @@ function normalizeSettings(value) {
   const source = value && typeof value === 'object' ? value : {};
   return {
     readingContextMenu: source.readingContextMenu !== false,
+    persistentAudioCache: source.persistentAudioCache === true,
+    backgroundAudio: source.backgroundAudio === true,
     readingFloatingToolbar: source.readingFloatingToolbar === true,
     readingFloatingAction: source.readingFloatingAction === 'from-selection' ? 'from-selection' : 'selection',
     settingsLanguage: source.settingsLanguage === 'chinese' ? 'chinese' : 'english',

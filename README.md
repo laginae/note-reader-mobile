@@ -129,11 +129,15 @@ It must return MP3 or WAV bytes. If a remote secret is selected, it is sent as a
 
 ## Playback and Limits
 
-**Session audio and continuity:** already prepared audio is reused within the same reading session (up to 64 parts / 16 MiB of cached audio bytes, excluding active responses and playback). In Playback settings, **Prepare the next audio part** is off by default. Enabling it permits one upcoming part to be synthesized alongside the current one, with at most two synthesis operations in flight. Future text may be sent and billed even if you never listen to it. Rapid jumps prioritize the latest queued target; sent requests cannot necessarily be cancelled and may still delay it. Pause prevents new queued work. Stop, changing documents or changing the voice/provider clears reusable session audio; exports and saved positions are untouched. Privacy settings also provide **Clear session audio**. No persistent audio cache is added.
+**Session audio and continuity:** already prepared audio is reused within the same reading session (up to 64 parts / 16 MiB of cached audio bytes, excluding active responses and playback). In Playback settings, **Prepare the next audio part** is off by default. Enabling it permits one upcoming part to be synthesized alongside the current one, with at most two synthesis operations in flight. Future text may be sent and billed even if you never listen to it. Rapid jumps prioritize the latest queued target; sent requests cannot necessarily be cancelled and may still delay it. Pause prevents new queued work. Stop, changing documents or changing the voice/provider clears reusable session audio; exports and saved positions are untouched. Privacy settings also provide **Clear session audio**.
+
+**Optional device audio reuse:** Privacy > **Reuse audio on this device** is off by default. Online/self-hosted audio can be reused across sessions for up to 24 hours / 64 MiB / 128 parts, with an 8 MiB limit per part. IndexedDB storage stays outside the vault; records contain audio, numeric metadata and hashed keys, not note text or credentials. Audio can still contain private content and is not encrypted by the plugin; OS backups may include it. Expired entries are removed on use, enabled startup and every ten minutes while enabled. Disable the option or use **Clear reusable device audio** to remove this separate cache. Storage failure falls back to normal synthesis and may incur charges. System speech and exports do not use it.
+
+**Experimental background audio:** Playback > Advanced options > **Background audio only** is off by default. For online/self-hosted audio it avoids deliberately pausing when the app is hidden, stops hidden UI redraws, and exposes supported system play/pause, stop, seek and segment controls. Lock-screen metadata uses only the plugin name. It does not keep iOS alive or guarantee lock-screen continuity; system speech still pauses. Physical iPhone/iPad testing is required before relying on it for long background sessions.
 
 **Waiting-time diagnostics:** run **Copy playback waiting-time summary** to copy bounded numeric statistics from this plugin session. Nothing is uploaded or written to disk automatically; the report contains no text, paths, voices or keys. It measures preparation, queueing, foreground waiting and the browser's playback-start event, not physical speaker output. `sessionToPlaying` starts when the reading queue is ready, not at the original click; extraction, when measured, is separate. Paused time is excluded from jump/gap intent measurements. First-time synthesis and slow providers still require waiting. Developers can run `npm run benchmark:playback` for a network-free synthetic comparison, not a real-provider speed claim.
 
-Simple formulas such as `$z_{\mathrm d}$` are read as "z sub d". Font and spacing commands do not make a short formula complex; explicit skip settings and complex-formula safeguards still apply.
+In concise mode, simple formulas such as `$z_{\mathrm d}$` are read as "z d"; verbose mode retains "subscript". Font and spacing commands do not make a short formula complex; explicit skip settings and complex-formula safeguards still apply.
 
 Conventional bounds such as `[\ell,u]` and matching `E_{\min}` / `E_{\max}` endpoints use concise "to" phrasing; verbose mode retains "closed interval". Other bracketed pairs keep their brackets. Simply subscripted adjacent factors are separated by "times".
 
@@ -157,7 +161,7 @@ Filtering is conservative: uncertain edge text, larger titles and numbered headi
 - PDF extraction finishes before playback; this is not the desktop progressive-PDF implementation. Image-only PDFs need OCR.
 - Highlighting, PDF bookmark editing and Web viewer/Copilot integration are not included in this release.
 - Reading-order and resume anchors are heuristic. Complex PDFs and changed files may need a new selected starting point.
-- Background/lock-screen playback is not guaranteed. The plugin pauses when the app is hidden.
+- Background/lock-screen playback is not guaranteed. Hidden playback pauses by default; the experimental opt-in applies only to online/self-hosted audio.
 - If the device blocks autoplay, tap Resume to play the retained audio; this does not request another synthesis.
 
 ## Manual Installation
