@@ -6,8 +6,6 @@ A mobile-first read-aloud companion for Markdown notes, text-based PDFs and loca
 
 **Formerly Note and PDF Voice Reader for Mobile.** Same plugin, new name. Your settings and update path remain unchanged; no reinstall is required.
 
-**0.3.1 is an early mobile release.** An iPhone user has confirmed full-file reading, starting from selected text, pause/resume, Stop, speed adjustment and an unobstructed toolbar in their tested setup. The new outline, footnote, HTML and export workflows still need broader device testing. Complex PDFs may have layout-specific issues. This is a separate plugin and does not change the desktop edition.
-
 ## Highlights
 
 - **Read beside your document:** touch-sized controls with pause, Stop, speed and current-audio seeking.
@@ -22,10 +20,6 @@ A mobile-first read-aloud companion for Markdown notes, text-based PDFs and loca
 
 ## Install and Start
 
-Playback settings offer independent switches for the editor reading menu and the optional Editing Toolbar speaker icon. The icon defaults to selected text, with an option to read from the selection to the document end. It requires a selection and an enabled Editing Toolbar plugin.
-
-Settings separate **Reading method** (System speech / Online speech / Self-hosted service) from the online provider. Existing configurations are preserved. Configure the secret and voice, review the processing permission, then use **Test voice** for a fixed sample that never reads your notes. Online tests may incur charges. **Stop test** cancels the test; it does not replace an ongoing reading or export. Self-hosted speech uses your HTTPS endpoint, not a model running on the phone. Advanced chunk and prefetch controls are collapsed in Playback settings.
-
 1. Use Obsidian 1.11.4 or later and back up your vault.
 2. Open **Settings → Community plugins → Browse** and search for **Cozy Read Aloud Mobile**.
 3. Select **Install**, then **Enable**. You can also open the [community listing](https://community.obsidian.md/plugins/note-reader-mobile).
@@ -33,6 +27,20 @@ Settings separate **Reading method** (System speech / Online speech / Self-hoste
 5. Start with device system speech, or choose an online engine in the plugin settings and explicitly enable processing after configuring its secret.
 
 To browse and read local HTML files, install and enable **HTML Reader** as well. Avoid starting the desktop and mobile reader plugins at the same time in one vault.
+
+### Voice and shortcut options
+
+Settings separate **Reading method** (System speech / Online speech / Self-hosted service) from the online provider. Existing configurations are preserved. Configure the secret and voice, review the processing permission, then use **Test voice** for a fixed sample that never reads your notes. Online tests may incur charges. **Stop test** cancels the test; it does not replace an ongoing reading or export. Self-hosted speech uses your HTTPS endpoint, not a model running on the phone. Advanced chunk and prefetch controls are collapsed in Playback settings.
+
+Playback settings offer independent switches for the editor reading menu and the optional Editing Toolbar speaker icon. The icon defaults to selected text, with an option to read from the selection to the document end. It requires a selection and an enabled Editing Toolbar plugin.
+
+## Compatibility and Testing
+
+Earlier iPhone testing confirmed full-file reading, starting from selected text, pause/resume, Stop, speed adjustment and an unobstructed toolbar in the user's setup. This is feedback on an earlier release, not a full device test of each subsequent update.
+
+Compatibility can vary by device, theme and PDF layout. Outlines, footnotes, HTML reading and audio export still need broader device testing, including on iPad and Android. Complex PDFs may have layout-specific issues. See the [device checklist](docs/mobile-validation.md) for the earlier reports and scenarios to verify.
+
+**Background playback is experimental and off by default.** iOS may interrupt playback when the app is in the background or the screen is locked. iPhone/iPad background continuity has not yet passed physical-device testing; the option applies only to online/self-hosted audio, not system speech.
 
 ## Current capabilities
 
@@ -86,9 +94,11 @@ Voice/API references: [OpenAI speech](https://developers.openai.com/api/docs/gui
 
 The default engine is device system speech. The plugin itself makes no TTS network request in that mode; the OS and voice implementation determine whether their speech processing is offline. Prefer voices identified as local when privacy matters. Installed voices may not be exposed to the mobile WebView.
 
-All online engines are opt-in. Only current audio text is sent after consent. API keys are read from Obsidian SecretStorage; only secret names are saved in `data.json`. OpenRouter requests require `provider.zdr: true` and `provider.data_collection: "deny"`; unavailable routes fail rather than silently weakening those flags.
+All online engines are opt-in. After consent, the plugin sends text within the chosen reading range for synthesis. Enabling lookahead or continuity may also send upcoming text or neighboring sentences within that range before you hear them. API keys are read from Obsidian SecretStorage; only secret names are saved in `data.json`. OpenRouter requests require `provider.zdr: true` and `provider.data_collection: "deny"`; unavailable routes fail rather than silently weakening those flags.
 
-The plugin has no developer relay server or built-in telemetry. Playback audio is held in memory; settings and optional resume records stay in the vault and may be synchronized by your chosen sync service. OS, Obsidian and provider policies are separate. Stopping/timing out cannot undo processing or billing already begun. Failed requests are not automatically retried, and raw provider error bodies are not displayed.
+The plugin has no developer relay server or built-in telemetry. By default, playback audio is kept in session memory. If you enable **Reuse audio on this device**, eligible audio is also stored on the device outside the vault, with size limits and expiry cleanup. This separate cache is not encrypted by the plugin; audio can contain private content, and OS backups may include it. You can clear it in Privacy settings. See [Playback and Limits](#playback-and-limits) for retention and cleanup details.
+
+Settings, optional resume records and explicitly exported audio stay in the vault and may be synchronized by your chosen sync service. OS, Obsidian and provider policies are separate. Stopping/timing out cannot undo processing or billing already begun. Failed requests are not automatically retried, and raw provider error bodies are not displayed.
 
 OpenRouter defaults to Kokoro `bm_george` (UK English male); presets also include US English voices. Microsoft compatibility voice IDs may be rejected by a route even when accepted elsewhere. Models, voices, account access and prices remain provider-dependent.
 
@@ -145,17 +155,6 @@ Conventional bounds such as `[\ell,u]` and matching `E_{\min}` / `E_{\max}` endp
 
 Filtering is conservative: uncertain edge text, larger titles and numbered headings are retained. When starting partway through a PDF, up to three preceding pages provide local recognition evidence but are not read aloud. Unique headers, unusual margins, rotated pages or missing text coordinates may remain unfiltered; disable the setting if body text is omitted.
 
-| Capability | Mobile 0.3.1 | Desktop 0.9.4 |
-| --- | --- | --- |
-| Markdown and text PDFs | Supported; device testing pending | Supported |
-| MiMo and custom speech APIs | Added; device/provider checks pending | Available |
-| Local executable / Python engines | Not included | Available |
-| Academic text cleanup | Shared-core opt-in algorithms | Available |
-| PDF header/footer filtering | Default-on local heuristic; can be disabled | Available |
-| PDF outline and footnote separation | Added; broader device testing pending | Available |
-| Local HTML and audio export | HTML Reader integration; WAV export from online engines | Available |
-| Highlights, PDF bookmark writing, Web viewer, Copilot | Not included | Available |
-
 - Online synthesis uses normal speed; playback rate is applied locally, avoiding doubled speed or a new paid synthesis merely to change speed. System speech rate/volume changes may apply at the next utterance.
 - The five-second buttons and current-audio slider only seek within the loaded online audio, not future chunks or system speech.
 - PDF extraction finishes before playback; this is not the desktop progressive-PDF implementation. Image-only PDFs need OCR.
@@ -163,6 +162,21 @@ Filtering is conservative: uncertain edge text, larger titles and numbered headi
 - Reading-order and resume anchors are heuristic. Complex PDFs and changed files may need a new selected starting point.
 - Background/lock-screen playback is not guaranteed. Hidden playback pauses by default; the experimental opt-in applies only to online/self-hosted audio.
 - If the device blocks autoplay, tap Resume to play the retained audio; this does not request another synthesis.
+
+## Mobile and Desktop Editions
+
+This is a separate plugin and does not modify or replace the [desktop edition](https://github.com/laginae/note-reader-cosyvoice). The table describes supported features, not completed device testing; see [Compatibility and Testing](#compatibility-and-testing) for validation limits.
+
+| Capability | Mobile | Desktop |
+| --- | --- | --- |
+| Markdown and text PDFs | Supported | Supported |
+| MiMo and custom speech APIs | Supported; endpoint compatibility varies | Supported |
+| Local executable / Python engines | Not included; use an HTTPS self-hosted service instead | Supported |
+| Academic text cleanup | Configurable Markdown and formula handling | Supported |
+| PDF header/footer filtering | Default-on local heuristic; can be disabled | Supported |
+| PDF outlines and footnote separation | Supported | Supported |
+| Local HTML and audio export | HTML Reader integration; WAV export from online engines | Supported |
+| Highlights, PDF bookmark writing, Web viewer, Copilot | Not included | Supported |
 
 ## Manual Installation
 
