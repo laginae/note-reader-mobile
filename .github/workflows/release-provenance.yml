@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      contents: read
+      contents: write
       id-token: write
       attestations: write
     steps:
@@ -35,7 +35,7 @@ jobs:
         run: |
           VERSION=$(node -p 'require("./manifest.json").version')
           if [ -n "$EVENT_TAG" ] && [ "$EVENT_TAG" != "$VERSION" ]; then exit 1; fi
-          git diff --exit-code "$VERSION" HEAD -- src package.json package-lock.json manifest.json styles.css
+          git diff --exit-code "$VERSION" HEAD -- src scripts ocr-licenses ocr-source-lock.json package.json package-lock.json manifest.json styles.css
           echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Install, build and test
         run: |
@@ -53,6 +53,16 @@ jobs:
             cmp "$file" "published/$file"
             sha256sum "$file" >> "$GITHUB_STEP_SUMMARY"
           done
+      - name: Package matching optional OCR resources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          cd dist
+          zip -r cozy-mobile-ocr-resources.zip ocr-assets
+          sha256sum cozy-mobile-ocr-resources.zip > cozy-mobile-ocr-resources.zip.sha256
+          gh release upload "$RELEASE_TAG" --repo "$REPOSITORY" cozy-mobile-ocr-resources.zip cozy-mobile-ocr-resources.zip.sha256
       - name: Attest verified build
         uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
         with:
@@ -60,3 +70,4 @@ jobs:
             main.js
             manifest.json
             styles.css
+            dist/cozy-mobile-ocr-resources.zip

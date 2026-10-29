@@ -1,11 +1,11 @@
 {
   "name": "note-reader-mobile",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "private": true,
   "description": "Mobile-first note, PDF and local HTML voice reader with academic reading tools and WAV export.",
   "license": "MIT",
   "scripts": {
-    "build": "esbuild src/main.js --bundle --external:obsidian --external:@codemirror/state --external:@codemirror/view --platform=browser --format=cjs --target=es2020 --outfile=main.js --log-level=warning",
+    "build": "node scripts/build.cjs",
     "test": "npm run build && node --test test/*.test.cjs && npm run check:mobile",
     "check:mobile": "node scripts/check-mobile-boundary.cjs",
     "benchmark:playback": "node scripts/benchmark-playback.cjs"
@@ -15,6 +15,9 @@
     "htmlparser2": "10.0.0"
   },
   "devDependencies": {
-    "esbuild": "0.25.10"
+    "@tesseract.js-data/chi_sim": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "esbuild": "0.25.10",
+    "tesseract.js": "7.0.0"
   }
 }

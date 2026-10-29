@@ -8,6 +8,7 @@ const { disclosure, renderEngineChoice, renderPreview } = require('./engine-setu
 const { applyTerms, fitSpeechParts, adjacentContext } = require('./speech-options');
 const { addSpeechContextSetting, addSpeechTermsSettings } = require('./speech-options-settings');
 const { registerReadingMenu, syncEditingToolbar, addReadingMenuSettings } = require('./reading-menu');
+const { registerOcr, addOcrSettings, openOcr, isImage } = require('./ocr-entry');
 
 const {
   ItemView,
@@ -354,6 +355,7 @@ class NoteReaderMobileView extends ItemView {
 class NoteReaderMobilePlugin extends Plugin {
   async onload() {
     this.settings = normalizeSettings(await this.loadData());
+    registerOcr(this);
     startDeviceCacheMaintenance(this);
     registerReadingMenu(this, snapshot => this.runSafely(() => this.startTextSession(snapshot.text, {
       file: snapshot.file, kind: 'markdown', sourceLabel: snapshot.file.basename || snapshot.file.name,
@@ -444,6 +446,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   onunload() {
+    this.ocrModal?.close();
     this.readingHighlights?.dispose();
     this.exportModal?.close();
     this.clearHtmlSelectionListener();
@@ -467,7 +470,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   speechConfigurationKey() {
-    const { readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
+    const { ocrEnabled, readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
     return JSON.stringify(speech);
   }
 
@@ -966,6 +969,7 @@ class NoteReaderMobilePlugin extends Plugin {
   async readFile() {
     const ui = getUi(this.settings);
     const file = this.getActiveFile();
+    if (isImage(file)) { openOcr(this, file); return; }
     if (!file) {
       new Notice(ui.noFile);
       return;
@@ -2057,6 +2061,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
     const options = academicOptions(this.plugin.settings);
+    addOcrSettings(containerEl, this.plugin, Setting);
     const zh = this.plugin.settings.settingsLanguage === 'chinese';
     const label = (en, cn) => zh ? cn : en;
     new Setting(containerEl).setName(label('Skip PDF headers and footers', '跳过 PDF 页眉页脚'))

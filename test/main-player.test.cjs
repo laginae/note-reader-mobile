@@ -96,6 +96,7 @@ test('reading menu and floating icon preferences do not interrupt playback', asy
   plugin.settings.persistentAudioCache=true;
   plugin.settings.backgroundAudio=true;
   plugin.settings.readingHighlight=false;
+  plugin.settings.ocrEnabled=true;
   await plugin.saveSettings();
   assert.equal(stops,0);
   assert.equal(plugin.saved.at(-1).readingFloatingAction,'from-selection');

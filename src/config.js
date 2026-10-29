@@ -83,6 +83,7 @@ const OPENROUTER_VOICES = {
 };
 
 const DEFAULT_SETTINGS = Object.freeze({
+  ocrEnabled: false,
   readingContextMenu: true,
   readingFloatingToolbar: false,
   readingFloatingAction: 'selection',
@@ -179,6 +180,7 @@ function normalizeChunkLimits(value) {
 function normalizeSettings(value) {
   const source = value && typeof value === 'object' ? value : {};
   return {
+    ocrEnabled: source.ocrEnabled === true,
     readingContextMenu: source.readingContextMenu !== false,
     persistentAudioCache: source.persistentAudioCache === true,
     backgroundAudio: source.backgroundAudio === true,

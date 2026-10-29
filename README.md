@@ -34,6 +34,8 @@ Open **Document outline**, tap a heading to return to that part of the note, or 
 
 ## Highlights
 
+- **Optional OCR (experimental):** off by default, with a separately installed resource pack and single-page recognition. Read printed text in scanned PDFs and PNG/JPEG/WebP after editing the preview. No image upload, no model load at startup. Physical iPhone/iPad/Android validation is pending. [Setup and device checklist](docs/local-ocr.md).
+
 - **Read beside your document:** touch-sized controls with pause, Stop, speed and current-audio seeking.
 - **Passage highlighting:** a soft highlight marks the current passage in Markdown reading/editing views, text-based PDFs and accessible local HTML Reader views. Toggle the highlighter icon or **Playback > Highlight reading passage**. This is passage-level, not word timing or automatic scrolling. Uncertain matches are left unmarked; changing the source clears stale marks. Highlighting does not modify files or send extra text to speech providers.
 - **Editor menu:** Markdown Live Preview/Source context menus offer Read aloud from here and Read selected text. Mobile availability depends on Obsidian exposing its editor menu; the system selection popup is not replaced. Existing toolbar actions remain available for PDF, HTML and reading views.
