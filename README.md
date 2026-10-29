@@ -63,6 +63,8 @@ Playback settings offer independent switches for the editor reading menu and the
 
 ## Compatibility and Testing
 
+For this release, use the [step-by-step device checklist](docs/mobile-test-checklist.zh-CN.md) and [public sample](docs/mobile-public-sample.md). Current-device acceptance is pending; automated interruption and selection tests are not physical-device results.
+
 Earlier iPhone testing confirmed full-file reading, starting from selected text, pause/resume, Stop, speed adjustment and an unobstructed toolbar in the user's setup. This is feedback on an earlier release, not a full device test of each subsequent update.
 
 Compatibility can vary by device, theme and PDF layout. Outlines, footnotes, HTML reading and audio export still need broader device testing, including on iPad and Android. Complex PDFs may have layout-specific issues. See the [device checklist](docs/mobile-validation.md) for the earlier reports and scenarios to verify.

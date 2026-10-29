@@ -1,5 +1,7 @@
 # Cozy Read Aloud Mobile
 
+本轮真机测试清单：[按步骤测试](docs/mobile-test-checklist.zh-CN.md) · [公开示例笔记](docs/mobile-public-sample.md)。当前版本的 iPhone、iPad 和 Android 验收仍待完成，后台播放仍为实验性、默认关闭。
+
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 这是面向 Obsidian 手机和平板端的笔记、PDF 与本地 HTML 朗读插件。

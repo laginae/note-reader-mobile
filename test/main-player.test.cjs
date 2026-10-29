@@ -506,6 +506,44 @@ test('each online audio applies persistent playback settings and detaches event 
   } finally { global.Audio = OriginalAudio; }
 });
 
+test('system interruption and late play resolution keep the same mobile audio paused', async () => {
+  const plugin = fixture({ speechEngine: 'mimo' });
+  synthesize = async () => ({ arrayBuffer: new ArrayBuffer(8), mimeType: 'audio/mpeg' });
+  const OriginalAudio = global.Audio;
+  let resolvePlay;
+  global.Audio = class {
+    play() { return new Promise(resolve => { resolvePlay = resolve; }); }
+    pause() { this.pauses = (this.pauses || 0) + 1; this.onpause?.(); }
+    load() {} removeAttribute() {}
+  };
+  try {
+    const pending = plugin.playOnlineChunk('A public interruption sample.',1,1);
+    await new Promise(resolve => setImmediate(resolve));
+    const audio = plugin.activeAudio;
+    audio.onpause();
+    assert.equal(plugin.pauseRequested, true);
+    resolvePlay(); await Promise.resolve();
+    audio.onplaying();
+    assert.ok(audio.pauses >= 2);
+    assert.equal(plugin.activeAudio, audio);
+    assert.equal(plugin.queue.currentIndex, 0);
+    plugin.cancelActivePlayback();
+    assert.equal(await pending, 'cancelled');
+    assert.equal(audio.onpause, null);
+  } finally { global.Audio = OriginalAudio; }
+});
+
+test('PDF starting anchors fail closed on absent or repeated text and retain exact cross-page suffix', () => {
+  const plugin = fixture();
+  const pages = [{text:'First public sentence. Repeated sentence. Repeated sentence.',pageNumber:1}];
+  assert.throws(() => plugin.buildPdfChunks(pages,{anchor:'Repeated sentence.'}), /uniquely/);
+  assert.throws(() => plugin.buildPdfChunks(pages,{anchor:'Missing text.'}), /uniquely/);
+  const chunks=plugin.buildPdfChunks([{text:'Before. Keep this part',pageNumber:1},{text:'and the continuation. After.',pageNumber:2}],{anchor:'Keep this part and the continuation.'});
+  const text=chunks.map(x=>x.text).join(' ');
+  assert.doesNotMatch(text,/Before/);
+  assert.match(text,/Keep this part and the continuation\. After\./);
+});
+
 test('lookahead is opt-in, bounded to one part, and ready audio is reused on replay', async () => {
   const tick = () => new Promise(resolve => setImmediate(resolve));
   const OriginalAudio = global.Audio;
@@ -566,6 +604,31 @@ test('rapid mobile navigation shares a two-request budget and never plays stale 
     for(const request of requests.slice(3)) request.resolve({arrayBuffer:new ArrayBuffer(8),mimeType:'audio/mpeg'});
     await old; await tick(); assert.equal(instances.length,1);
     assert.equal(plugin.preparationPool.bytes,0);
+  } finally {global.Audio=OriginalAudio;}
+});
+
+test('100 seeded mobile sequences retain current audio ownership through interruptions and navigation', async () => {
+  const tick=()=>new Promise(resolve=>setImmediate(resolve));
+  const OriginalAudio=global.Audio;
+  synthesize=async()=>({arrayBuffer:new ArrayBuffer(8),mimeType:'audio/mpeg'});
+  global.Audio=class {
+    constructor(){this.paused=true;this.currentTime=0;this.duration=4;}
+    play(){this.paused=false;this.onplaying?.();return Promise.resolve();}
+    pause(){this.paused=true;this.onpause?.();} load(){} removeAttribute(){}
+  };
+  let seed=117;const random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/2**32);
+  try {
+    for(let run=0;run<100;run++){
+      const p=fixture({speechEngine:'mimo',onlinePrefetch:run%2===0,speed:[1,1.75,2][run%3]});
+      const pending=p.runFromCurrent();await tick();
+      for(let i=0;i<10;i++){
+        const old=p.activeAudio,ended=old?.onended;
+        if(random()<.5){p.pauseReading();old?.onplaying?.();assert.equal(p.pauseRequested,true);p.resumeReading();await tick();}
+        else{p.moveChunk(p.queue.currentIndex===0?1:-1);await tick();const active=p.activeAudio;ended?.();await tick();assert.equal(p.activeAudio,active);}
+        if(p.activeAudio){p.activeAudio.onpause?.();assert.equal(p.pauseRequested,false,'late pause event must not undo a resume');}
+      }
+      p.stopReading({quiet:true});await pending;assert.equal(p.queue.items.length,0);assert.equal(p.activeAudio,null);
+    }
   } finally {global.Audio=OriginalAudio;}
 });
 
@@ -1040,6 +1103,31 @@ test('Stop while autoplay is blocked settles pending playback and revokes its bl
     assert.equal(plugin.activeAudio, null);
     assert.equal(audio.removed, true);
   } finally { global.Audio = OriginalAudio; URL.revokeObjectURL = originalRevoke; }
+});
+
+test('a rejected old Resume promise cannot pause or fail the next mobile audio part', async () => {
+  const plugin = fixture({ speechEngine: 'mimo' });
+  synthesize = async () => ({ arrayBuffer: new ArrayBuffer(8), mimeType: 'audio/mpeg' });
+  const OriginalAudio = global.Audio;
+  let rejectResume;
+  global.Audio = class {
+    constructor() { this.plays = 0; }
+    play() { this.plays++; return this.plays === 2 ? new Promise((resolve, reject) => { rejectResume = reject; }) : Promise.resolve(); }
+    pause() {} removeAttribute() {} load() {}
+  };
+  try {
+    const first = plugin.playOnlineChunk('First public test.', 1, 1);
+    await new Promise(resolve => setImmediate(resolve));
+    plugin.pauseReading(); plugin.resumeReading();
+    plugin.activeAudio.onended(); assert.equal(await first, 'ended');
+    const next = plugin.playOnlineChunk('Second public test.', 1, 1);
+    await new Promise(resolve => setImmediate(resolve));
+    const active = plugin.activeAudio;
+    rejectResume(new Error('old device interruption'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(plugin.activeAudio, active); assert.equal(plugin.pauseRequested, false);
+    active.onended(); assert.equal(await next, 'ended');
+  } finally { global.Audio = OriginalAudio; }
 });
 
 test('hidden document after extraction waits before sending any opening part', async () => {

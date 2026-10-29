@@ -1,5 +1,9 @@
 # Mobile Device Validation
 
+## 0.4.2 Release
+
+This release adds automated interruption/stale-event and exact PDF selection-anchor coverage. Physical iPhone, iPad and Android checks are deferred, not passed. Use the [step-by-step Chinese checklist](mobile-test-checklist.zh-CN.md) and [invented public note](mobile-public-sample.md); record each result separately. Experimental background playback remains off by default and is not guaranteed. Browser or Windows layout tests do not replace device testing.
+
 ## 0.4.1 Passage Highlighting
 
 Version 0.4.1 adds optional passage-level highlighting and fixes Markdown outline targets hidden beneath the toolbar. Automated tests and Windows Obsidian mobile-layout checks cover Markdown reading/editing, PDF overlays, pause, next, Stop, restart and the highlight toggle. Local HTML marking is checked in a rendered iframe harness, not a real HTML Reader installation. These checks do not establish iPhone/iPad/Android compatibility. The README demos predate the highlighter button; control layout may differ.
@@ -50,4 +54,4 @@ Use a public sample note/PDF and a dedicated test key with a small spending cap.
 
 ## Release Gate
 
-Only mark scenarios passed after device observation or an explicit, attributed user report. Automated checks do not satisfy device tests. Keep early GitHub releases marked as prereleases; the user has requested community submission with the limited validation status disclosed. Community acceptance is a separate review outcome, not proof of complete device coverage.
+Only mark scenarios passed after device observation or an explicit, attributed user report. Automated checks do not satisfy device tests. Release notes must retain the limited validation status. Community acceptance is a separate review outcome, not proof of complete device coverage.

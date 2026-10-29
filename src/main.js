@@ -46,7 +46,7 @@ const {
   normalizeSettings,
 } = require('./config');
 const { extractPdfPages, extractPdfDocument } = require('./pdf-extractor');
-const { preparePdfSpeech, preparePdfSelection } = require('./pdf-speech');
+const { preparePdfSpeech, preparePdfSelection, uniquePdfRange } = require('./pdf-speech');
 const { buildPdfOutline, sectionPages, outlineKey } = require('./pdf-outline');
 const { PdfOutlineModal } = require('./pdf-outline-ui');
 const { markdownOutline, htmlOutline, sectionText } = require('./document-outline');
@@ -439,6 +439,8 @@ class NoteReaderMobilePlugin extends Plugin {
       }
       if (!document.hidden) this.renderViews();
     });
+    this.registerDomEvent(window, 'pagehide', () => this.pauseReading());
+    this.registerDomEvent(document, 'freeze', () => this.pauseReading());
   }
 
   onunload() {
@@ -1177,6 +1179,11 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   buildPdfChunks(pages, context) {
+    const originalPages = pages.map(page => page.unfilteredText || page.text);
+    const anchorRange = context.anchor ? (uniquePdfRange(originalPages[0] || '', context.anchor)
+      || uniquePdfRange(originalPages.join('\n'), context.anchor)) : null;
+    if (context.anchor && !anchorRange) throw new Error('Cannot uniquely locate the PDF starting point. Select a longer passage again. / 无法唯一定位 PDF 起读位置，请重新选择较长片段。');
+    let sourceOffset = 0;
     const chunker = createIncrementalSpeechChunker(
       this.getChunkLimits(),
       { detailed: true }
@@ -1184,14 +1191,13 @@ class NoteReaderMobilePlugin extends Plugin {
     const chunks = [];
     pages.forEach((page, pageIndex) => {
       let text = page.text;
-      if (pageIndex === 0 && context.anchor) {
-        const sliced = sliceTextFromReadingPosition(text, { anchor: context.anchor });
-        text = sliced.text;
-        // Preserve an explicitly chosen edge anchor if filtering removed it on the starting page.
-        if (!sliced.matched && page.unfilteredText) {
-          const original = sliceTextFromReadingPosition(page.unfilteredText, { anchor: context.anchor });
-          if (original.matched) text = original.text;
-        }
+      const original = originalPages[pageIndex], offset = sourceOffset;
+      sourceOffset += original.length + 1;
+      if (anchorRange && sourceOffset <= anchorRange.start) return;
+      if (anchorRange && anchorRange.start >= offset) {
+        const suffix = original.slice(anchorRange.start - offset);
+        const filtered = uniquePdfRange(text, suffix);
+        text = filtered ? text.slice(filtered.start) : suffix;
       }
       const mode = normalizeFootnoteMode(context.footnoteMode || this.settings.pdfFootnoteMode);
       if (mode !== 'inline') {
@@ -1527,7 +1533,9 @@ class NoteReaderMobilePlugin extends Plugin {
     const loadingStarted = this.playbackTimings.now();
     let measuredPlaying = false;
     audio.onplaying = () => {
-      if (measuredPlaying || sessionId !== this.sessionId || runId !== this.runId) return;
+      if (sessionId !== this.sessionId || runId !== this.runId || this.activeAudio !== audio) return;
+      if (this.pauseRequested) { audio.pause(); return; }
+      if (measuredPlaying) return;
       measuredPlaying = true;
       this.playbackTimings.playing(loadingStarted);
     };
@@ -1556,6 +1564,11 @@ class NoteReaderMobilePlugin extends Plugin {
         }
       };
       this.activePlaybackSettle = (outcome = 'cancelled') => settle(outcome);
+      // Calls, headset changes and OS media controls can pause without a UI click.
+      audio.onpause = () => {
+        if (!settled && !audio.ended && audio.paused !== false && this.activeAudio === audio
+          && sessionId === this.sessionId && runId === this.runId && !this.pauseRequested) this.pauseReading();
+      };
       audio.onended = () => {
         if (measuredPlaying && sessionId === this.sessionId && runId === this.runId) this.playbackTimings.ended();
         settle('ended');
@@ -1573,6 +1586,7 @@ class NoteReaderMobilePlugin extends Plugin {
     this.playbackBlocked = false;
     if (this.activeAudio) {
       this.activeAudio.onplaying = null;
+      this.activeAudio.onpause = null;
       this.activeAudio.onended = this.activeAudio.onerror = this.activeAudio.onloadedmetadata = this.activeAudio.ontimeupdate = this.activeAudio.ondurationchange = null;
       this.activeAudio.pause();
       this.activeAudio.removeAttribute('src');
@@ -1588,7 +1602,9 @@ class NoteReaderMobilePlugin extends Plugin {
   requestAudioPlayback(audio, onError) {
     try {
       const result = audio.play();
-      if (result && typeof result.catch === 'function') void result.catch(onError);
+      if (result && typeof result.then === 'function') void result.then(() => {
+        if (this.activeAudio === audio && this.pauseRequested) audio.pause();
+      }, onError);
     } catch (error) {
       onError(error);
     }
@@ -1653,7 +1669,8 @@ class NoteReaderMobilePlugin extends Plugin {
       const audio = this.activeAudio;
       this.playbackBlocked = false;
       this.requestAudioPlayback(audio, (error) => {
-        if (sessionId === this.sessionId && runId === this.runId && !this.pauseForBlockedAudio(error, audio)) this.fail(new Error('The synthesized audio could not be played on this device.'));
+        if (sessionId === this.sessionId && runId === this.runId && this.activeAudio === audio
+          && !this.pauseForBlockedAudio(error, audio)) this.fail(new Error('The synthesized audio could not be played on this device.'));
       });
     }
     this.statusDetail = '';
