@@ -92,16 +92,16 @@
 }
 
 /* Use the pane's width, not the screen's, for iPad Split View and Stage Manager. */
-@container note-reader-mobile-pane (min-width: 680px) {
+@container note-reader-mobile-pane (min-width: 960px) {
   .note-reader-mobile-dock {
     display: grid;
-    grid-template-columns: minmax(220px, 0.9fr) minmax(320px, 1.4fr);
+    grid-template-columns: minmax(380px, 1fr) minmax(320px, 1.2fr);
     align-items: center;
     column-gap: 12px;
   }
 }
 
-@container note-reader-mobile-pane (max-width: 299px) {
+@container note-reader-mobile-pane (max-width: 379px) {
   .note-reader-mobile-dock .note-reader-mobile-dock-controls {
     grid-template-columns: 44px 44px 44px 44px minmax(0, 1fr);
   }
@@ -113,13 +113,47 @@
 
 .note-reader-mobile-dock-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px 44px;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 44px);
   gap: 4px;
   align-items: center;
 }
 
 .note-reader-mobile-dock-header.has-pdf-outline {
-  grid-template-columns: minmax(0, 1fr) repeat(3, 44px);
+  grid-template-columns: minmax(0, 1fr) repeat(4, 44px);
+}
+
+@container note-reader-mobile-pane (max-width: 379px) {
+  .note-reader-mobile-dock .note-reader-mobile-dock-header {
+    grid-template-columns: repeat(4, 44px);
+    justify-content: space-between;
+  }
+  .note-reader-mobile-dock-header > select {
+    grid-column: 1 / -1;
+  }
+}
+
+.note-reader-mobile-dock button[aria-pressed="true"] {
+  color: var(--interactive-accent);
+  background-color: var(--background-modifier-hover);
+}
+
+.note-reader-mobile-speaking {
+  background-color: rgba(232, 182, 53, 0.22);
+  box-shadow: inset 3px 0 rgba(184, 137, 20, 0.65);
+}
+
+.note-reader-mobile-pdf-highlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  overflow: hidden;
+}
+
+.note-reader-mobile-pdf-highlight > div {
+  position: absolute;
+  background-color: rgba(232, 182, 53, 0.25);
+  pointer-events: none;
 }
 
 .note-reader-mobile-dock [hidden],
@@ -283,8 +317,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-.note-reader-mobile-dock .note-reader-mobile-range {
+.note-reader-mobile-dock input[type="range"].note-reader-mobile-range {
   display: block;
+  width: 100%;
+  min-width: 0;
   min-height: 26px;
   opacity: 0.65;
 }

@@ -10,6 +10,10 @@ function rule(selector) {
   return css.slice(start, css.indexOf('}', start) + 1);
 }
 
+test('PDF highlights never intercept document selection or clicks', () => {
+  assert.match(rule('.note-reader-mobile-pdf-highlight'), /pointer-events: none/);
+});
+
 // These guard the layout rules; they do not replace an iOS WebView/device test.
 test('expanded player bounds its height and can scroll final controls above phone navigation', () => {
   const root = rule('.note-reader-mobile-root');
@@ -37,11 +41,12 @@ test('native floating and hidden phone headers participate in layout while the r
 
 test('iPad layout uses pane container width and supports narrow split windows without phone safe-area overrides', () => {
   assert.match(rule('.note-reader-mobile-docked-view'), /container-type: inline-size/);
-  assert.match(css, /@container note-reader-mobile-pane \(min-width: 680px\)/);
-  assert.match(css, /@container note-reader-mobile-pane \(max-width: 299px\)/);
+  assert.match(css, /@container note-reader-mobile-pane \(min-width: 960px\)/);
+  assert.match(css, /@container note-reader-mobile-pane \(max-width: 379px\)/);
   assert.match(rule('.note-reader-mobile-dock .note-reader-mobile-dock-controls'), /44px 44px 44px 44px minmax\(0, 1fr\)/);
   assert.match(rule('.note-reader-mobile-dock .note-reader-mobile-dock-timeline'), /grid-column: 1 \/ -1/);
   assert.doesNotMatch(rule('.note-reader-mobile-docked-view'), /padding-top/);
+  assert.match(rule('.note-reader-mobile-dock-header > select'), /grid-column: 1 \/ -1/);
 });
 
 test('tablet button padding and iOS slider size cannot enlarge the compact controls', () => {
@@ -51,6 +56,7 @@ test('tablet button padding and iOS slider size cannot enlarge the compact contr
   assert.match(text, /padding: 8px/);
   assert.match(rule('.note-reader-mobile-dock'), /--slider-thumb-width: 12px/);
   assert.match(rule('.note-reader-mobile-dock'), /--slider-thumb-height: 12px/);
+  assert.match(rule('.note-reader-mobile-dock input[type="range"].note-reader-mobile-range'), /width: 100%/);
 });
 
 test('PDF outline reserves safe-area space and scrolls only its list while keeping actions accessible', () => {
@@ -58,6 +64,6 @@ test('PDF outline reserves safe-area space and scrolls only its list while keepi
   assert.match(rule('.note-reader-mobile-outline-modal'), /safe-area-inset-bottom/);
   assert.match(rule('.note-reader-mobile-outline-list'), /overflow: auto/);
   assert.match(rule('.note-reader-mobile-outline-header'), /44px 44px/);
-  assert.match(rule('.note-reader-mobile-dock-header.has-pdf-outline'), /minmax\(0, 1fr\) repeat\(3, 44px\)/);
+  assert.match(rule('.note-reader-mobile-dock-header.has-pdf-outline'), /minmax\(0, 1fr\) repeat\(4, 44px\)/);
   assert.match(rule('.note-reader-mobile-outline button.note-reader-mobile-outline-row'), /min-height: 44px/);
 });

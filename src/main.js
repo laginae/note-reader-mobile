@@ -50,6 +50,9 @@ const { preparePdfSpeech, preparePdfSelection } = require('./pdf-speech');
 const { buildPdfOutline, sectionPages, outlineKey } = require('./pdf-outline');
 const { PdfOutlineModal } = require('./pdf-outline-ui');
 const { markdownOutline, htmlOutline, sectionText } = require('./document-outline');
+const { locateMarkdownPreview } = require('./outline-navigation');
+const { ReadingHighlights } = require('./reading-highlights');
+const { pdfHighlightBlocks, mapSpeechBlocks } = require('./highlight-source');
 const { normalizeFootnoteMode, splitFootnotesInRange } = require('./pdf-footnotes');
 const { MAX_HTML_BYTES, isHtmlFile, extractHtmlText, extractHtmlTree, htmlReaderDocument, captureHtmlSelection } = require('./html-text');
 const { AudioExportModal } = require('./audio-export-ui');
@@ -354,6 +357,7 @@ class NoteReaderMobilePlugin extends Plugin {
     startDeviceCacheMaintenance(this);
     registerReadingMenu(this, snapshot => this.runSafely(() => this.startTextSession(snapshot.text, {
       file: snapshot.file, kind: 'markdown', sourceLabel: snapshot.file.basename || snapshot.file.name,
+      sourceText: snapshot.sourceText, sourceOffset: snapshot.start,
     })), message => new Notice(message));
     this.settings.readingPositions = normalizeReadingPositions(this.settings.readingPositions);
     this.queue = createPlaybackQueueState();
@@ -399,10 +403,12 @@ class NoteReaderMobilePlugin extends Plugin {
     this.registerEvent(this.app.workspace.on('layout-change', () => this.syncToolbar()));
     this.registerEvent(this.app.workspace.on('editor-change', (_editor, view) => {
       if (this.selectionSnapshot?.filePath === view?.file?.path) this.selectionSnapshot = null;
+      this.readingHighlights?.update();
     }));
     this.registerEvent(this.app.vault.on('modify', (file) => {
       if (this.selectionSnapshot?.filePath === file.path) this.selectionSnapshot = null;
       if (this.pdfOutlineCache?.path === file.path) this.pdfOutlineCache = null;
+      this.readingHighlights?.update();
     }));
     this.registerDomEvent(document, 'selectionchange', () => this.captureSelection());
     this.registerDomEvent(document, 'pointerdown', (event) => {
@@ -427,6 +433,7 @@ class NoteReaderMobilePlugin extends Plugin {
       }
     });
     this.registerDomEvent(document, 'visibilitychange', () => {
+      this.readingHighlights?.update();
       if (document.hidden && this.queue.items.length && !mayPlayHidden(this.settings)) {
         this.pauseReading();
       }
@@ -435,6 +442,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   onunload() {
+    this.readingHighlights?.dispose();
     this.exportModal?.close();
     this.clearHtmlSelectionListener();
     this.outlineModal?.close();
@@ -457,7 +465,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   speechConfigurationKey() {
-    const { persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
+    const { readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
     return JSON.stringify(speech);
   }
 
@@ -565,6 +573,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   syncToolbar() {
+    this.readingHighlights?.update();
     if (!this.toolbarEnabled) return;
     const leaf = this.getSourceLeaf();
     const host = leaf?.view?.containerEl;
@@ -598,6 +607,10 @@ class NoteReaderMobilePlugin extends Plugin {
     scope.value = this.readingScope || 'file';
     scope.addEventListener('change', () => { this.readingScope = scope.value; this.updateToolbar(); });
     const outline = createButton(header, { icon: 'list-tree', iconOnly: true, label: ui.pdfOutline, onClick: () => this.openPdfOutline() });
+    const highlight = createButton(header, { icon: 'highlighter', iconOnly: true, label: this.settings.settingsLanguage === 'chinese' ? '高亮朗读段落' : 'Highlight reading passage', onClick: () => this.runSafely(async () => {
+      this.settings.readingHighlight = !this.settings.readingHighlight;
+      await this.saveSettings(); this.renderViews();
+    }) });
     createButton(header, { icon: 'panel-top', iconOnly: true, label: ui.openPanel, onClick: () => this.runSafely(() => this.activateView()) });
     createButton(header, { icon: 'x', iconOnly: true, label: ui.closeReader, onClick: () => this.runSafely(() => this.closeReader()) });
     const controls = root.createDiv({ cls: 'note-reader-mobile-dock-controls' });
@@ -620,7 +633,7 @@ class NoteReaderMobilePlugin extends Plugin {
     const speed = controls.createEl('select'); speed.setAttr('aria-label', ui.speed);
     for (const value of SPEED_PRESETS) { const option = speed.createEl('option', { text: `${value}x` }); option.value = String(value); }
     speed.addEventListener('change', () => this.runSafely(() => this.setPlaybackSpeed(Number(speed.value))));
-    this.dock = { root, host, header, outline, language: this.settings.settingsLanguage, scope, play, stop, previous, next, seek, speed, status, isScrubbing: () => scrubbing };
+    this.dock = { root, host, header, outline, highlight, language: this.settings.settingsLanguage, scope, play, stop, previous, next, seek, speed, status, isScrubbing: () => scrubbing };
     this.updateToolbar();
   }
 
@@ -630,6 +643,7 @@ class NoteReaderMobilePlugin extends Plugin {
     const ui = getUi(this.settings);
     const isPdf = String(this.getSourceLeaf()?.view.file?.extension).toLowerCase() === 'pdf';
     const hasOutline = ['pdf', 'md', 'markdown', 'html', 'htm'].includes(String(this.getActiveFile()?.extension).toLowerCase());
+    refs.highlight.setAttr('aria-pressed', String(this.settings.readingHighlight !== false));
     refs.outline.hidden = !hasOutline;
     refs.header.toggleClass('has-pdf-outline', hasOutline);
     const footnotesOption = Array.from(refs.scope.children).find((child) => child.value === 'footnotes');
@@ -889,6 +903,7 @@ class NoteReaderMobilePlugin extends Plugin {
         const pages = await extractPdfPages(this.app, file, {
           loadPdfJs, startPageNumber: pageNumber, endPageNumber: selected?.endPageNumber || pageNumber,
           skipHeaders: false, mathSettings: academicOptions(this.settings),
+          highlight: true,
           isCancelled: () => operationId !== this.sessionId,
         });
         if (operationId !== this.sessionId) return;
@@ -896,15 +911,18 @@ class NoteReaderMobilePlugin extends Plugin {
         const prepared = preparePdfSelection(text, pages);
         if (prepared === null) throw new Error(this.settings.settingsLanguage === 'chinese'
           ? '无法准确定位 PDF 选区，请重新选择文字。' : 'Could not locate the PDF selection reliably. Select the text again.');
-        this.startTextSession(prepared, { file, kind: 'pdf', pageNumber, sourceLabel: ui.sourceSelection });
+        this.startTextSession(prepared, { file, kind: 'pdf', pageNumber, sourceLabel: ui.sourceSelection,
+          highlightBlocks: pdfHighlightBlocks(pages, value => this.prepareText(value)) });
       } catch (error) { if (operationId === this.sessionId) this.fail(error); }
       return;
     }
+    const snapshot = this.getSelectionSnapshot(), view = this.getMarkdownView();
     this.startTextSession(text, {
       file,
       kind: file && String(file.extension).toLowerCase() === 'pdf' ? 'pdf' : 'markdown',
       pageNumber: this.getSelectionSnapshot()?.pageNumber || 1,
       sourceLabel: ui.sourceSelection,
+      sourceOffset: snapshot?.from && view?.editor?.posToOffset?.(snapshot.from),
     });
   }
 
@@ -938,7 +956,9 @@ class NoteReaderMobilePlugin extends Plugin {
       const fullText = await this.app.vault.cachedRead(file);
       text = sliceTextFromReadingPosition(fullText, { anchor: selectedText }).text;
     }
-    this.startTextSession(text, { file, kind: 'markdown', sourceLabel: ui.sourceSelection });
+    const snapshot = this.getSelectionSnapshot(), view = this.getMarkdownView();
+    this.startTextSession(text, { file, kind: 'markdown', sourceLabel: ui.sourceSelection,
+      sourceOffset: snapshot?.from && view?.editor?.posToOffset?.(snapshot.from) });
   }
 
   async readFile() {
@@ -958,7 +978,7 @@ class NoteReaderMobilePlugin extends Plugin {
       return;
     }
     const text = await this.app.vault.cachedRead(file);
-    this.startTextSession(text, { file, kind: 'markdown', sourceLabel: ui.sourceFile });
+    this.startTextSession(text, { file, kind: 'markdown', sourceLabel: ui.sourceFile, sourceText: text, sourceOffset: 0 });
   }
 
   async resumeFile() {
@@ -1075,7 +1095,7 @@ class NoteReaderMobilePlugin extends Plugin {
       return (this.pdfOutlineCache = { path: file.path, key, data });
     }
     const result = await extractPdfDocument(this.app, file, {
-      loadPdfJs, includeOutline: true, skipHeaders: this.settings.pdfSkipHeaders, isCancelled, onProgress,
+      loadPdfJs, includeOutline: true, highlight: true, skipHeaders: this.settings.pdfSkipHeaders, isCancelled, onProgress,
       mathSettings: this.settings.stripMarkdown ? academicOptions(this.settings) : null,
     });
     if (isCancelled()) return null;
@@ -1099,21 +1119,27 @@ class NoteReaderMobilePlugin extends Plugin {
   readPdfSection(file, key, data, index, remaining) {
     if (!this.isOutlineCurrent(file, key) || this.getActiveFile() !== file) throw new Error('PDF or settings changed.');
     if (data.kind) {
-      this.startTextSession(sectionText(data, index, remaining), { file, kind: 'markdown', sourceLabel: data.entries[index].title });
+      this.startTextSession(sectionText(data, index, remaining), { file, kind: 'markdown', sourceLabel: data.entries[index].title,
+        ...(data.kind === 'markdown' ? { sourceText: data.text, sourceOffset: data.entries[index].offset } : {}) });
       return;
     }
     const pages = sectionPages(data, index, remaining);
     const chunks = this.buildPdfChunks(pages, {});
     if (!chunks.length) throw new Error('No readable text in the section.');
-    this.startPreparedChunks(chunks, { file, kind: 'pdf', sourceLabel: data.entries[index].title });
+    this.startPreparedChunks(chunks, { file, kind: 'pdf', sourceLabel: data.entries[index].title,
+      highlightRanges: mapSpeechBlocks(pdfHighlightBlocks(pages, value => this.prepareText(value)), chunks) });
   }
 
-  async locateOutlineEntry(file, key, data, index) {
+  async locateOutlineEntry(file, key, data, index, isCancelled = () => false) {
     if (!this.isOutlineCurrent(file, key)) throw new Error('Document changed.');
     const leaf = this.getSourceLeaf(), entry = data.entries[index];
     if (!entry || leaf?.view.file !== file) throw new Error('Open the source document first.');
     const view = leaf.view;
+    const navigation = this.outlineNavigationId = (this.outlineNavigationId || 0) + 1;
+    const isCurrent = () => !isCancelled() && navigation === this.outlineNavigationId
+      && this.isOutlineCurrent(file, key) && leaf.view === view && view.file === file && this.getSourceLeaf() === leaf;
     await this.app.workspace.revealLeaf(leaf);
+    if (!isCurrent()) throw new Error('Navigation cancelled.');
     if (data.kind === 'html') {
       const doc = htmlReaderDocument(view);
       const headings = doc?.body ? extractHtmlTree(doc.body).headings.map((h) => h.element).filter(Boolean) : [];
@@ -1127,7 +1153,7 @@ class NoteReaderMobilePlugin extends Plugin {
       if (view.getMode?.() !== 'preview' && view.editor?.scrollIntoView) {
         view.editor.scrollIntoView({ from: { line: entry.line, ch: 0 }, to: { line: entry.line, ch: 0 } }, true); return;
       }
-      if (leaf.setEphemeralState) { leaf.setEphemeralState({ line: entry.line }); return; }
+      if (await locateMarkdownPreview(leaf, entry, isCurrent)) return;
       await this.app.workspace.openLinkText(`${file.path}#${entry.title}`, file.path, false); return;
     }
     const child = view.viewer?.child || view.pdfViewer?.child;
@@ -1187,6 +1213,7 @@ class NoteReaderMobilePlugin extends Plugin {
         loadPdfJs,
         startPageNumber: context.startPageNumber,
         skipHeaders: this.settings.pdfSkipHeaders,
+        highlight: true,
         mathSettings: this.settings.stripMarkdown ? academicOptions(this.settings) : null,
         isCancelled: () => operationId !== this.sessionId,
         onProgress: ({ pageNumber, totalPages }) => {
@@ -1205,6 +1232,7 @@ class NoteReaderMobilePlugin extends Plugin {
         file,
         kind: 'pdf',
         sourceLabel: context.sourceLabel,
+        highlightRanges: mapSpeechBlocks(pdfHighlightBlocks(pages, value => this.prepareText(value)), chunks),
       });
     } catch (error) {
       if (operationId === this.sessionId) {
@@ -1234,7 +1262,8 @@ class NoteReaderMobilePlugin extends Plugin {
       clean,
       this.getChunkLimits()
     );
-    this.startPreparedChunks(chunks, context);
+    this.startPreparedChunks(chunks, { ...context, highlightRaw: text,
+      ...(context.highlightBlocks ? { highlightRanges: mapSpeechBlocks(context.highlightBlocks, chunks) } : {}) });
   }
 
   startPreparedChunks(chunks, context) {
@@ -1270,6 +1299,10 @@ class NoteReaderMobilePlugin extends Plugin {
     this.runId += 1;
     this.pauseRequested = false;
     this.queue = createPlaybackQueueState(items);
+    try {
+      this.readingHighlights ||= new ReadingHighlights(this);
+      this.readingHighlights.begin(context.highlightRaw, chunks, context, value => this.prepareText(value));
+    } catch { this.readingHighlights?.dispose(); }
     this.resetPreparation(true);
     this.playbackTimings.begin('sessionToPlaying');
     this.sourceLabel = context.sourceLabel || '';
@@ -1280,6 +1313,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   beginOperation(status) {
+    this.readingHighlights?.dispose();
     this.previewOwner = null;
     this.toolbarEnabled = true;
     this.syncToolbar();
@@ -1670,6 +1704,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   stopReading(options = {}) {
+    this.readingHighlights?.dispose();
     this.previewOwner = null;
     this.sessionId += 1;
     this.runId += 1;
@@ -1931,6 +1966,11 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
 
     if (this.activeTab === 'playback') {
     addReadingMenuSettings(containerEl, this.plugin, Setting);
+    new Setting(containerEl).setName(languageIndex === 2 ? '高亮朗读段落' : 'Highlight reading passage')
+      .setDesc(languageIndex === 2 ? '在原文中标记当前朗读段落，不强制滚动。无法可靠定位或原文已变化时不显示；不会修改文件。' : 'Mark the current passage in the source without forcing scroll. Hidden when the source changes or cannot be located reliably; files are not modified.')
+      .addToggle(toggle => toggle.setValue(this.plugin.settings.readingHighlight !== false).onChange(async value => {
+        this.plugin.settings.readingHighlight = value; await this.plugin.saveSettings(); this.plugin.renderViews();
+      }));
 
     new Setting(containerEl)
       .setName(ui.speed)

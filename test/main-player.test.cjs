@@ -95,6 +95,7 @@ test('reading menu and floating icon preferences do not interrupt playback', asy
   plugin.settings.readingFloatingAction='from-selection';
   plugin.settings.persistentAudioCache=true;
   plugin.settings.backgroundAudio=true;
+  plugin.settings.readingHighlight=false;
   await plugin.saveSettings();
   assert.equal(stops,0);
   assert.equal(plugin.saved.at(-1).readingFloatingAction,'from-selection');
@@ -196,6 +197,30 @@ test('PDF navigation uses page coordinates when available and a page link otherw
   leaf.view.viewer = null; let link; plugin.app.workspace.openLinkText = async (v) => { link = v; };
   await plugin.locateOutlineEntry(leaf.view.file, key, data, 0);
   assert.equal(link, 'public-example.pdf#page=2');
+});
+
+test('Markdown preview outline uses source lines and does not change playback', async () => {
+  const plugin = fixture(); const leaf = sourceFixture(plugin);
+  const key = plugin.documentOutlineKey(leaf.view.file), queue = plugin.queue;
+  leaf.view.getMode = () => 'preview';
+  let line;
+  leaf.view.previewMode = { applyScroll: value => { line = value; } };
+  leaf.setEphemeralState = () => { throw Error('Wrong navigation path'); };
+  await plugin.locateOutlineEntry(leaf.view.file, key, { kind: 'markdown', entries: [{ line: 8, offset: 80 }] }, 0);
+  assert.equal(line, 8); assert.equal(plugin.queue, queue);
+});
+
+test('outline navigation rechecks cancellation and document changes after revealing the view', async () => {
+  for (const changedFile of [false, true]) {
+    const plugin = fixture(); const leaf = sourceFixture(plugin), file = leaf.view.file;
+    const key = plugin.documentOutlineKey(file); let cancelled = false;
+    leaf.view.editor = { scrollIntoView: () => { throw Error('Stale document scrolled'); } };
+    plugin.app.workspace.revealLeaf = async () => {
+      if (changedFile) leaf.view.file = { ...file, path: 'another-public-example.md' };
+      else cancelled = true;
+    };
+    await assert.rejects(plugin.locateOutlineEntry(file, key, { kind: 'markdown', entries: [{ line: 0 }] }, 0, () => cancelled), /cancelled/);
+  }
 });
 
 test('HTML navigation locates the selected duplicate heading without starting speech', async () => {
@@ -795,6 +820,27 @@ test('outline UI binds selected section indices after filtering and does not res
   assert.equal(modal.rows.length, 1); modal.rows[0].select.events.click();
   assert.equal(modal.readSection.disabled, false); modal.readRemaining.events.click();
   assert.equal(read[3], 1); assert.equal(read[4], true); assert.equal(loads, 1); assert.equal(modal.closed, true);
+});
+
+test('closing or refreshing the outline cancels pending navigation without closing a fresh outline', async () => {
+  for (const refresh of [false, true]) {
+    const plugin = fixture(); sourceFixture(plugin);
+    plugin.loadPdfOutline = async () => ({ key: 'public', data: { source: 'headings', entries: [{ title: 'Public heading', level: 1, line: 0, offset: 0 }] } });
+    let finish, isCancelled;
+    plugin.locateOutlineEntry = (_file, _key, _data, _index, cancelled) => {
+      isCancelled = cancelled; return new Promise(resolve => { finish = resolve; });
+    };
+    plugin.openPdfOutline(); const modal = plugin.outlineModal;
+    await new Promise(resolve => setImmediate(resolve));
+    const pending = modal.locate(0);
+    assert.equal(isCancelled(), false);
+    if (refresh) await modal.load(true); else modal.close();
+    assert.equal(isCancelled(), true);
+    finish(); await pending;
+    assert.equal(modal.closed, !refresh);
+    assert.equal(modal.locating, false);
+    if (refresh) modal.close();
+  }
 });
 
 test('HTML source reading, saved anchors and cancellation never pass markup to speech', async () => {

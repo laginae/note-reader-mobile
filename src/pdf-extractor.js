@@ -63,6 +63,13 @@ async function extractPdfDocument(app, file, options = {}) {
         const content = await page.getTextContent();
         const viewport = page.getViewport?.({ scale: 1 });
         let layout = extractPdfTextLayout(content?.items, { viewport });
+        if (options.highlight) layout.lines = layout.lines.map(line => {
+          const sizes = (content?.items || []).filter(item => Math.abs(Number(item.transform?.[5]) - line.y) <= Math.max(2, Number(item.height) * .5)
+            && Number(item.transform?.[4]) >= line.xMin - 2 && Number(item.transform?.[4]) <= line.xMax + 2)
+            .map(item => Math.max(Math.abs(Number(item.height) || 0), Math.abs(Number(item.transform?.[3]) || 0))).filter(n => n > 0).sort((a,b) => a-b);
+          const height = sizes[Math.floor(sizes.length / 2)];
+          return height ? { ...line, highlightRect: [line.xMin, line.y - height * .2, line.xMax, line.y + height] } : line;
+        });
         const mathChanges = options.mathSettings ? pdfMathChanges(layout, content?.items || [],
           options.mathSettings, pdfFontNames(page, content?.items || []), encodingContext) : [];
         if (options.includeOutline) layout = outlineLayout(layout, content?.items, content?.styles, viewport);

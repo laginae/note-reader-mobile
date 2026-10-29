@@ -125,6 +125,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   stripMarkdown: true,
   mathReadingLanguage: 'english',
   rememberReadingPosition: false,
+  readingHighlight: true,
   readingPositions: {},
 });
 
@@ -222,6 +223,7 @@ function normalizeSettings(value) {
       ? source.mathReadingLanguage
       : DEFAULT_SETTINGS.mathReadingLanguage,
     rememberReadingPosition: source.rememberReadingPosition === true,
+    readingHighlight: source.readingHighlight !== false,
     readingPositions: source.readingPositions && typeof source.readingPositions === 'object'
       ? source.readingPositions
       : {},

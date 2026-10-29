@@ -87,11 +87,13 @@ class PdfOutlineModal extends Modal {
   async locate(index) {
     if (!this.data || this.closed || this.locating) return;
     this.locating = true;
+    const generation = this.generation;
+    const cancelled = () => this.closed || generation !== this.generation;
     try {
-      await this.plugin.locateOutlineEntry(this.file, this.key, this.data, index);
-      if (!this.closed) this.close();
+      await this.plugin.locateOutlineEntry(this.file, this.key, this.data, index, cancelled);
+      if (!cancelled()) this.close();
     } catch {
-      if (!this.closed) this.status.textContent = this.t('无法定位标题，请确认原文视图已打开且文件未改变。', 'Could not locate the heading. Open the unchanged source document and try again.');
+      if (!cancelled()) this.status.textContent = this.t('无法定位标题，请确认原文视图已打开且文件未改变。', 'Could not locate the heading. Open the unchanged source document and try again.');
     } finally { this.locating = false; }
   }
   updateSelection() {

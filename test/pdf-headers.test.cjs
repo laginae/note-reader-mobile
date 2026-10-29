@@ -58,6 +58,22 @@ test('repeated authors/journal lines and page numbers are removed without reorde
   }
 });
 
+test('optional highlight coordinates preserve extraction, header filtering and source items', async () => {
+  const items = itemsFor(1), original = JSON.stringify(items);
+  const basic = await pdfFixture(1, { items: () => items }).run();
+  const highlighted = await pdfFixture(1, { items: () => items }).run({ highlight: true });
+  assert.equal(highlighted[0].text, basic[0].text);
+  assert.equal(JSON.stringify(items), original);
+  assert.ok(basic[0].layout.lines.every(line => !line.highlightRect));
+  for (const line of highlighted[0].layout.lines) {
+    assert.equal(line.highlightRect.length, 4);
+    assert.ok(line.highlightRect.every(Number.isFinite));
+    assert.equal(line.highlightRect[0], line.xMin);
+    assert.equal(line.highlightRect[2], line.xMax);
+    assert.ok(line.highlightRect[1] < line.y && line.highlightRect[3] > line.y);
+  }
+});
+
 test('distinct page evidence is required and changing page digits are normalized', () => {
   const a = page(1, [item('Journal volume 12 page 1', 30, 775), item('Body paragraph.', 30, 500)]);
   const b = page(2, [item('Journal volume 12 page 2', 30, 775), item('Body paragraph.', 30, 500)]);

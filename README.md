@@ -6,9 +6,36 @@ A mobile-first read-aloud companion for Markdown notes, text-based PDFs and loca
 
 **Formerly Note and PDF Voice Reader for Mobile.** Same plugin, new name. Your settings and update path remain unchanged; no reinstall is required.
 
+## Quick Demos
+
+**Open the toolbar, read, pause and close** (26 seconds).
+
+Silent demos recorded in Obsidian's mobile-layout simulation on Windows, not on a phone. [Recording details](docs/media/README.md).
+
+<img src="docs/images/mobile-controls-demo.gif" alt="Open the mobile reading toolbar, read a public sample note, pause, resume, stop and close the toolbar." width="340">
+
+<details>
+<summary>Read selected text and return to your note (29 seconds)</summary>
+
+Select a passage, expand the player, choose **Read selection**, then use **Back to document** to return without stopping playback. Selection gestures differ on real phones.
+
+<img src="docs/images/mobile-selection-demo.gif" alt="Select a public passage, expand the mobile player, read only the selection, return to the note and close the reader." width="340">
+
+</details>
+
+<details>
+<summary>Jump to a heading and read a section (30 seconds)</summary>
+
+Open **Document outline**, tap a heading to return to that part of the note, or select its reading range and choose **Read section**. Jumping to a heading does not start or restart playback.
+
+<img src="docs/images/mobile-outline-demo.gif" alt="Open the document outline, jump to a visible heading below the toolbar, select its range and read only that section." width="340">
+
+</details>
+
 ## Highlights
 
 - **Read beside your document:** touch-sized controls with pause, Stop, speed and current-audio seeking.
+- **Passage highlighting:** a soft highlight marks the current passage in Markdown reading/editing views, text-based PDFs and accessible local HTML Reader views. Toggle the highlighter icon or **Playback > Highlight reading passage**. This is passage-level, not word timing or automatic scrolling. Uncertain matches are left unmarked; changing the source clears stale marks. Highlighting does not modify files or send extra text to speech providers.
 - **Editor menu:** Markdown Live Preview/Source context menus offer Read aloud from here and Read selected text. Mobile availability depends on Obsidian exposing its editor menu; the system selection popup is not replaced. Existing toolbar actions remain available for PDF, HTML and reading views.
 - **Academic PDF reading:** column-aware text ordering, optional header/footer filtering, and conservative footnote separation, including first-page correspondence blocks.
 - **PDF formula handling:** when Strip Markdown is enabled, local font evidence can repair known math-font encoding errors. Smart mode skips complex equations while retaining readable short expressions. Full-file, section and selected-text reading use the same rules; ambiguous selections ask you to select again rather than read nearby text. This is not OCR or a guarantee for every PDF font.

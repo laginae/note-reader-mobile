@@ -1,5 +1,11 @@
 # Mobile Device Validation
 
+## 0.4.1 Passage Highlighting
+
+Version 0.4.1 adds optional passage-level highlighting and fixes Markdown outline targets hidden beneath the toolbar. Automated tests and Windows Obsidian mobile-layout checks cover Markdown reading/editing, PDF overlays, pause, next, Stop, restart and the highlight toggle. Local HTML marking is checked in a rendered iframe harness, not a real HTML Reader installation. These checks do not establish iPhone/iPad/Android compatibility. The README demos predate the highlighter button; control layout may differ.
+
+On each device, verify the highlighter switch without restarting audio, pause retention, next/previous passages, Stop, file changes and editing the source. Check repeated text and partial selections, PDF zoom/rotation and two-column pages, HTML Reader reloads, dark themes and narrow split views. Highlighting must not intercept selection gestures or scroll the document. Ambiguous matches may remain unmarked. Use only public fixtures; highlighting itself must not add speech requests or persist source text in settings.
+
 ## 0.3.11 PDF Update
 
 Automated checks cover damaged embedded math fonts, ordinary multilingual text, short operators, complex formula blocks, bounded selected-text reading, cancellation, source changes and outline-cache invalidation. Original PDF text and coordinates are retained. No private documents or paid speech requests were used for this update's tests. Real iPhone/iPad/Android verification of these changes is pending; earlier user reports below do not validate this release.
