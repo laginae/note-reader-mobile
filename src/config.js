@@ -1,4 +1,5 @@
 'use strict';
+const { MINI_DEFAULTS, normalizeMiniSettings } = require('./mini-outline');
 
 const { normalizeByokProfile } = require('./byok');
 const { ELEVENLABS_MODELS, ELEVENLABS_VOICES } = require('./openrouter-elevenlabs');
@@ -83,6 +84,7 @@ const OPENROUTER_VOICES = {
 };
 
 const DEFAULT_SETTINGS = Object.freeze({
+  ...MINI_DEFAULTS,
   ocrEnabled: false,
   readingContextMenu: true,
   readingFloatingToolbar: false,
@@ -180,6 +182,7 @@ function normalizeChunkLimits(value) {
 function normalizeSettings(value) {
   const source = value && typeof value === 'object' ? value : {};
   return {
+    ...normalizeMiniSettings(source),
     ocrEnabled: source.ocrEnabled === true,
     readingContextMenu: source.readingContextMenu !== false,
     persistentAudioCache: source.persistentAudioCache === true,

@@ -9,6 +9,8 @@ const { applyTerms, fitSpeechParts, adjacentContext } = require('./speech-option
 const { addSpeechContextSetting, addSpeechTermsSettings } = require('./speech-options-settings');
 const { registerReadingMenu, syncEditingToolbar, addReadingMenuSettings } = require('./reading-menu');
 const { registerOcr, addOcrSettings, openOcr, isImage } = require('./ocr-entry');
+const { installMiniOutline } = require('./mini-outline-adapter');
+const { addMiniOutlineSettings } = require('./mini-outline');
 
 const {
   ItemView,
@@ -377,6 +379,7 @@ class NoteReaderMobilePlugin extends Plugin {
     this.backgroundControls = new BackgroundAudioControls(this);
     this.register(() => this.backgroundControls.dispose());
     this.lastSpeechConfiguration = this.speechConfigurationKey();
+    installMiniOutline(this);
 
     this.registerView(VIEW_TYPE, (leaf) => new NoteReaderMobileView(leaf, this));
     this.addRibbonIcon('audio-lines', getUi(this.settings).toolbar, () => this.showToolbar());
@@ -466,11 +469,12 @@ class NoteReaderMobilePlugin extends Plugin {
     this.lastSpeechConfiguration = configuration;
     this.settings.readingPositions = normalizeReadingPositions(this.settings.readingPositions);
     await this.saveData(this.settings);
+    this.miniOutline?.sync();
     await syncEditingToolbar(this);
   }
 
   speechConfigurationKey() {
-    const { ocrEnabled, readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
+    const { miniOutlineMode, miniOutlineSide, miniOutlineHover, miniOutlineDepth, ocrEnabled, readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
     return JSON.stringify(speech);
   }
 
@@ -562,6 +566,7 @@ class NoteReaderMobilePlugin extends Plugin {
     this.dock?.host.removeClass('note-reader-mobile-docked-view');
     this.dock?.root.remove();
     this.dock = null;
+    this.miniOutline?.schedule();
   }
 
   async closeReader(stop = true) {
@@ -611,7 +616,8 @@ class NoteReaderMobilePlugin extends Plugin {
     }
     scope.value = this.readingScope || 'file';
     scope.addEventListener('change', () => { this.readingScope = scope.value; this.updateToolbar(); });
-    const outline = createButton(header, { icon: 'list-tree', iconOnly: true, label: ui.pdfOutline, onClick: () => this.openPdfOutline() });
+    const outline = createButton(header, { icon: 'list-tree', iconOnly: true, label: ui.pdfOutline, onClick: () => this.toggleMiniOutline() });
+    outline.setAttribute('data-cozy-mini-toggle', '');
     const highlight = createButton(header, { icon: 'highlighter', iconOnly: true, label: this.settings.settingsLanguage === 'chinese' ? '高亮朗读段落' : 'Highlight reading passage', onClick: () => this.runSafely(async () => {
       this.settings.readingHighlight = !this.settings.readingHighlight;
       await this.saveSettings(); this.renderViews();
@@ -681,6 +687,7 @@ class NoteReaderMobilePlugin extends Plugin {
   renderViews() {
     this.backgroundControls?.update();
     if (typeof document !== 'undefined' && document.hidden) return;
+    this.miniOutline?.update();
     this.syncToolbar();
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
       if (leaf.view && leaf.view.contentEl) {
@@ -773,7 +780,8 @@ class NoteReaderMobilePlugin extends Plugin {
     createButton(commands, { icon: 'list-start', label: ui.readFromSelection, onClick: () => this.runSafely(() => this.readFromSelection()) });
     createButton(commands, { icon: 'file-audio', label: ui.readFile, onClick: () => this.runSafely(() => this.readFile()) });
     createButton(commands, { icon: 'history', label: ui.resumeFile, onClick: () => this.runSafely(() => this.resumeFile()) });
-    const outline = createButton(commands, { icon: 'list-tree', label: ui.pdfOutline, onClick: () => this.openPdfOutline() });
+    const outline = createButton(commands, { icon: 'list-tree', label: ui.pdfOutline, onClick: () => this.toggleMiniOutline() });
+    outline.setAttribute('data-cozy-mini-toggle', '');
     const footnotes = createButton(commands, { icon: 'text-quote', label: ui.readFootnotes, onClick: () => this.runSafely(() => this.readFootnotes()) });
     const exportAudio = createButton(commands, { icon: 'download', label: ui.exportAudio, onClick: () => this.openAudioExport() });
     const text = containerEl.createEl('p', { cls: 'note-reader-mobile-current-text' });
@@ -1079,6 +1087,13 @@ class NoteReaderMobilePlugin extends Plugin {
     this.startTextSession(text, { file, kind: 'markdown', sourceLabel });
   }
 
+  async toggleMiniOutline() {
+    const leaf = this.getSourceLeaf();
+    if (!leaf || !this.miniOutline) return this.openPdfOutline();
+    await this.app.workspace.revealLeaf(leaf);
+    return this.miniOutline.toggle(leaf.view);
+  }
+
   openPdfOutline() {
     const file = this.getActiveFile();
     if (!['pdf', 'md', 'markdown', 'html', 'htm'].includes(String(file?.extension).toLowerCase())) { new Notice(getUi(this.settings).noFile); return; }
@@ -1125,14 +1140,13 @@ class NoteReaderMobilePlugin extends Plugin {
   readPdfSection(file, key, data, index, remaining) {
     if (!this.isOutlineCurrent(file, key) || this.getActiveFile() !== file) throw new Error('PDF or settings changed.');
     if (data.kind) {
-      this.startTextSession(sectionText(data, index, remaining), { file, kind: 'markdown', sourceLabel: data.entries[index].title,
+      return this.startTextSession(sectionText(data, index, remaining), { file, kind: 'markdown', sourceLabel: data.entries[index].title,
         ...(data.kind === 'markdown' ? { sourceText: data.text, sourceOffset: data.entries[index].offset } : {}) });
-      return;
     }
     const pages = sectionPages(data, index, remaining);
     const chunks = this.buildPdfChunks(pages, {});
     if (!chunks.length) throw new Error('No readable text in the section.');
-    this.startPreparedChunks(chunks, { file, kind: 'pdf', sourceLabel: data.entries[index].title,
+    return this.startPreparedChunks(chunks, { file, kind: 'pdf', sourceLabel: data.entries[index].title,
       highlightRanges: mapSpeechBlocks(pdfHighlightBlocks(pages, value => this.prepareText(value)), chunks) });
   }
 
@@ -1987,6 +2001,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
 
     if (this.activeTab === 'playback') {
     addReadingMenuSettings(containerEl, this.plugin, Setting);
+    addMiniOutlineSettings(this.plugin, containerEl, Setting);
     new Setting(containerEl).setName(languageIndex === 2 ? '高亮朗读段落' : 'Highlight reading passage')
       .setDesc(languageIndex === 2 ? '在原文中标记当前朗读段落，不强制滚动。无法可靠定位或原文已变化时不显示；不会修改文件。' : 'Mark the current passage in the source without forcing scroll. Hidden when the source changes or cannot be located reliably; files are not modified.')
       .addToggle(toggle => toggle.setValue(this.plugin.settings.readingHighlight !== false).onChange(async value => {

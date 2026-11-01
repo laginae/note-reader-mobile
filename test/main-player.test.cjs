@@ -38,6 +38,7 @@ class Control {
   onChange(callback) { this.change = callback; return this; }
   onClick(callback) { this.click = callback; return this; }
   addOption(key, value) { this.options[key] = value; return this; }
+  addOptions(options) { Object.assign(this.options, options); return this; }
   setLimits() { return this; }
   setDynamicTooltip() { return this; }
   setPlaceholder() { return this; }
@@ -97,6 +98,10 @@ test('reading menu and floating icon preferences do not interrupt playback', asy
   plugin.settings.backgroundAudio=true;
   plugin.settings.readingHighlight=false;
   plugin.settings.ocrEnabled=true;
+  plugin.settings.miniOutlineMode='off';
+  plugin.settings.miniOutlineSide='left';
+  plugin.settings.miniOutlineHover=true;
+  plugin.settings.miniOutlineDepth=6;
   await plugin.saveSettings();
   assert.equal(stops,0);
   assert.equal(plugin.saved.at(-1).readingFloatingAction,'from-selection');

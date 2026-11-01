@@ -26,7 +26,7 @@ Select a passage, expand the player, choose **Read selection**, then use **Back 
 <details>
 <summary>Jump to a heading and read a section (30 seconds)</summary>
 
-Open **Document outline**, tap a heading to return to that part of the note, or select its reading range and choose **Read section**. Jumping to a heading does not start or restart playback.
+This earlier demo shows the full outline dialog, still available from the **Open PDF outline** command. The toolbar's outline button now opens the mini outline: tap a title to navigate, Play to read from it, or its row menu to read only that section. Navigation does not start or restart playback.
 
 <img src="docs/images/mobile-outline-demo.gif" alt="Open the document outline, jump to a visible heading below the toolbar, select its range and read only that section." width="340">
 
@@ -64,6 +64,14 @@ Settings separate **Reading method** (System speech / Online speech / Self-hoste
 Playback settings offer independent switches for the editor reading menu and the optional Editing Toolbar speaker icon. The icon defaults to selected text, with an option to read from the selection to the document end. It requires a selection and an enabled Editing Toolbar plugin.
 
 ## Compatibility and Testing
+
+### Mini Outline
+
+Open the document-edge directory button, the reading toolbar's outline icon, or **Toggle mini outline** without starting speech. Search headings, choose expanded levels and pin the directory. Titles navigate only; their play buttons read from the section, and row menus read only that section and its descendants. Browsing and reliably located reading sections have separate markers; manual directory browsing pauses tracking until **Return to reading**. The list scrolls independently and reserves bottom space.
+
+In Playback settings, **Auto** hides our edge entry when Floating TOC or another recognized floating-outline plugin is enabled. Toolbar and command access remain. Choose **Always show entry** or **Hide edge entry**, left/right placement, and optional mouse hover; touch uses tap. No other plugin is modified. The directory does not scan the vault or parse PDFs at startup. Its state is memory-only; changed files invalidate old targets. This replaces basic floating chapter navigation, not every specialized TOC feature. [Behavior and limits](docs/mini-outline.md).
+
+### Device Validation
 
 For this release, use the [step-by-step device checklist](docs/mobile-test-checklist.zh-CN.md) and [public sample](docs/mobile-public-sample.md). Current-device acceptance is pending; automated interruption and selection tests are not physical-device results.
 
