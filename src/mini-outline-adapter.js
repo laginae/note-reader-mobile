@@ -2,7 +2,7 @@
 const { registerMiniOutline, headingAt } = require('./mini-outline');
 const { markdownOutline, sectionText } = require('./document-outline');
 const { htmlReaderDocument, extractHtmlTree } = require('./html-text');
-const { browsingIndex, elementHeading, pdfViewer } = require('./mini-outline-position');
+const { browsingIndex, elementHeading, pdfViewer, scrollDocumentEdge } = require('./mini-outline-position');
 const { academicOptions } = require('@laginae/note-reader-core');
 
 function mobileMiniAdapter(plugin) {
@@ -43,6 +43,14 @@ function mobileMiniAdapter(plugin) {
       return !cancelled() && plugin.isOutlineCurrent(file, key) ? { ...data, file, key } : null;
     },
     pauseFollow() {},
+    async locateEdge(view, data, end, cancelled = () => false) {
+      if (cancelled()) return;
+      if (!valid(view, data)) throw Error('Changed');
+      await workspace.revealLeaf?.(view.leaf);
+      if (cancelled()) return;
+      if (!valid(view, data)) throw Error('Changed');
+      return scrollDocumentEdge(view, data, end, workspace);
+    },
     async locate(view, data, index) {
       if (!valid(view, data)) throw Error('Changed');
       await workspace.revealLeaf(view.leaf);

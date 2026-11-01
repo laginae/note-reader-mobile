@@ -39,3 +39,14 @@ test('reading marker is available with highlighting off and does not follow a st
   f.plugin.settings.readingHighlight=false;assert.equal(f.adapter.positions(f.view,data).reading,1);
   f.file.stat.mtime++;assert.equal(f.adapter.positions(f.view,data).reading,-1);
 });
+
+test('edge navigation uses the active source and rejects cancelled or changed targets after revealing its pane', async () => {
+  const f=fixture(),data=await f.adapter.load(f.view,()=>false),scrolls=[];
+  f.view.editor.scrollIntoView=range=>scrolls.push(range);
+  await f.adapter.locateEdge(f.view,data,false);await f.adapter.locateEdge(f.view,data,true);
+  assert.equal(scrolls.length,2);assert.equal(f.calls.some(call=>call[0]==='read'),false);
+  let cancelled=false;f.plugin.app.workspace.revealLeaf=async()=>{cancelled=true;};
+  await f.adapter.locateEdge(f.view,data,true,()=>cancelled);assert.equal(scrolls.length,2);
+  f.plugin.app.workspace.revealLeaf=async()=>{f.view.file={...f.file,path:'replacement-public.md'};};
+  await assert.rejects(f.adapter.locateEdge(f.view,data,true));assert.equal(scrolls.length,2);
+});

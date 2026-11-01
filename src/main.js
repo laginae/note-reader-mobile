@@ -474,7 +474,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   speechConfigurationKey() {
-    const { miniOutlineMode, miniOutlineSide, miniOutlineHover, miniOutlineDepth, ocrEnabled, readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
+    const { miniOutlineMode, miniOutlineSide, miniOutlineHover, miniOutlineDepth, miniOutlineTransparent, miniOutlineDoubleClick, miniOutlineWidth, miniOutlineTitleLines, miniOutlineStartup, ocrEnabled, readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
     return JSON.stringify(speech);
   }
 
@@ -2002,6 +2002,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
     if (this.activeTab === 'playback') {
     addReadingMenuSettings(containerEl, this.plugin, Setting);
     addMiniOutlineSettings(this.plugin, containerEl, Setting);
+    containerEl.createEl('h3', { cls: 'cozy-reader-settings-heading', text: languageIndex === 2 ? '播放' : 'Playback' });
     new Setting(containerEl).setName(languageIndex === 2 ? '高亮朗读段落' : 'Highlight reading passage')
       .setDesc(languageIndex === 2 ? '在原文中标记当前朗读段落，不强制滚动。无法可靠定位或原文已变化时不显示；不会修改文件。' : 'Mark the current passage in the source without forcing scroll. Hidden when the source changes or cannot be located reliably; files are not modified.')
       .addToggle(toggle => toggle.setValue(this.plugin.settings.readingHighlight !== false).onChange(async value => {

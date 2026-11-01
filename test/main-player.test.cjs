@@ -35,6 +35,7 @@ class Element {
 class Control {
   constructor() { this.options = {}; this.inputEl = new Element('textarea'); }
   setValue(value) { this.value = value; return this; }
+  setDisabled(value) { this.disabled = value; return this; }
   onChange(callback) { this.change = callback; return this; }
   onClick(callback) { this.click = callback; return this; }
   addOption(key, value) { this.options[key] = value; return this; }
@@ -43,9 +44,11 @@ class Control {
   setDynamicTooltip() { return this; }
   setPlaceholder() { return this; }
   setButtonText() { return this; }
+  setIcon() { return this; }
+  setTooltip() { return this; }
 }
 class Setting {
-  constructor(container) { container.rows ||= []; container.rows.push(this); this.settingEl = container.createDiv(); }
+  constructor(container) { container.rows ||= []; container.rows.push(this); this.settingEl = container.createDiv(); this.controlEl = this.settingEl.createDiv(); }
   setName(value) { this.name = value; return this; }
   setDesc(value) { this.desc = value; return this; }
   control(callback) { this.input = new Control(); callback(this.input); return this; }
@@ -55,6 +58,7 @@ class Setting {
   addDropdown(callback) { return this.control(callback); }
   addToggle(callback) { return this.control(callback); }
   addButton(callback) { return this.control(callback); }
+  addExtraButton(callback) { this.extra = new Control(); callback(this.extra); return this; }
   addComponent(callback) { this.input = callback({}); return this; }
 }
 let synthesize = async () => ({ arrayBuffer: new ArrayBuffer(8), mimeType: 'audio/mpeg' });
@@ -102,9 +106,26 @@ test('reading menu and floating icon preferences do not interrupt playback', asy
   plugin.settings.miniOutlineSide='left';
   plugin.settings.miniOutlineHover=true;
   plugin.settings.miniOutlineDepth=6;
+  plugin.settings.miniOutlineTransparent=true;
+  plugin.settings.miniOutlineDoubleClick=true;
+  plugin.settings.miniOutlineWidth=420;
+  plugin.settings.miniOutlineTitleLines=1;
+  plugin.settings.miniOutlineStartup=true;
   await plugin.saveSettings();
   assert.equal(stops,0);
   assert.equal(plugin.saved.at(-1).readingFloatingAction,'from-selection');
+});
+
+test('playback settings put shortcuts before the compact outline group without resetting saved preferences', () => {
+  const plugin=fixture({miniOutlineTitleLines:4,miniOutlineSide:'left',miniOutlineTransparent:true});
+  const tab=new loaded.__test.NoteReaderMobileSettingTab(plugin.app,plugin); tab.activeTab='playback'; tab.display();
+  const elements=tab.containerEl.all(), headings=elements.filter(el=>el.tagName==='H3');
+  assert.deepEqual(headings.slice(0,2).map(el=>el.textContent),['Reading shortcuts','Mini outline']);
+  const advanced=elements.find(el=>el.className==='cozy-mini-settings-advanced');
+  const rows=elements.flatMap(el=>el.rows||[]), lines=rows.find(row=>row.name==='Heading display lines');
+  assert.ok(advanced); assert.notEqual(advanced.open,true); assert.equal(advanced.contains(lines.settingEl),false);
+  assert.equal(lines.input.value,'4'); assert.equal(plugin.settings.miniOutlineSide,'left'); assert.equal(plugin.settings.miniOutlineTransparent,true);
+  for (const name of ['Outline side','Default expanded levels','Transparent background','Double-click heading to read','Open outline on hover']) assert.ok(advanced.contains(rows.find(row=>row.name===name).settingEl),name);
 });
 
 function sourceFixture(plugin, extension = 'md') {

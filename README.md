@@ -26,7 +26,7 @@ Select a passage, expand the player, choose **Read selection**, then use **Back 
 <details>
 <summary>Jump to a heading and read a section (30 seconds)</summary>
 
-This earlier demo shows the full outline dialog, still available from the **Open PDF outline** command. The toolbar's outline button now opens the mini outline: tap a title to navigate, Play to read from it, or its row menu to read only that section. Navigation does not start or restart playback.
+This earlier demo shows the full outline dialog, still available from the **Open PDF outline** command. The toolbar's outline button now opens the mini outline: tap a title to navigate, or use its row menu to read from it or read only that section. Navigation does not start or restart playback.
 
 <img src="docs/images/mobile-outline-demo.gif" alt="Open the document outline, jump to a visible heading below the toolbar, select its range and read only that section." width="340">
 
@@ -67,9 +67,13 @@ Playback settings offer independent switches for the editor reading menu and the
 
 ### Mini Outline
 
-Open the document-edge directory button, the reading toolbar's outline icon, or **Toggle mini outline** without starting speech. Search headings, choose expanded levels and pin the directory. Titles navigate only; their play buttons read from the section, and row menus read only that section and its descendants. Browsing and reliably located reading sections have separate markers; manual directory browsing pauses tracking until **Return to reading**. The list scrolls independently and reserves bottom space.
+Open the document-edge directory button, the reading toolbar's outline icon, or **Toggle mini outline** without starting speech. Search headings, choose expanded levels and pin the directory. Titles use two lines by default, configurable from one to four, and navigate only. Their row menu can reveal the full heading, read from the section or read only that section and its descendants. Common Markdown formatting is cleaned only in directory labels; navigation and source text are unchanged. Browsing uses accent text; reliably located reading sections also have a small play marker. Manual directory browsing pauses tracking until the **Return to reading** arrow is used. The list scrolls independently and reserves bottom space.
 
-In Playback settings, **Auto** hides our edge entry when Floating TOC or another recognized floating-outline plugin is enabled. Toolbar and command access remain. Choose **Always show entry** or **Hide edge entry**, left/right placement, and optional mouse hover; touch uses tap. No other plugin is modified. The directory does not scan the vault or parse PDFs at startup. Its state is memory-only; changed files invalidate old targets. This replaces basic floating chapter navigation, not every specialized TOC feature. [Behavior and limits](docs/mini-outline.md).
+Adjust the width from 260 to 600 pixels, with automatic limits in narrow panes. Reading shortcuts appear above Mini outline in settings; secondary preferences are under **More outline options**. Touch header icons and Close stay visible. Use **Go to document top/bottom** in Outline options to navigate without starting speech. On desktop, icons appear on hover or keyboard focus with an idle pin indicator; optional mouse double-click reading is off by default. Unpinning closes the directory.
+
+In **Playback → Mini outline**, the **Mini outline button** setting offers **Auto**, **Always show** or **Hide button**. Auto hides our document-edge button when Floating TOC or another recognized floating-outline plugin is enabled; toolbar and command access remain. Choose left/right placement and optional mouse hover; touch uses tap. The compact icon bar reveals search and expanded-level options on demand. Transparent background is optional on desktop; phones and tablets retain a solid background and larger controls. Reading shortcuts have their own settings group. No other plugin is modified. The directory does not scan the vault. Its state is memory-only; changed files invalidate old targets. This replaces basic floating chapter navigation, not every specialized TOC feature. [Behavior and limits](docs/mini-outline.md).
+
+**Open mini outline on startup** is off by default. Enable it to open and pin the active outline after workspace restoration, without the edge button or starting speech. Only the active supported document is loaded; background tabs are not parsed. With the option off, startup does not read text or parse PDFs. Dismissing the outline prevents further automatic opening during that session; disabling the option restores the previous edge-button preference. Physical-device validation remains pending.
 
 ### Device Validation
 
