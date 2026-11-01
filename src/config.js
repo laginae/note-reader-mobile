@@ -7,18 +7,18 @@ const { normalizedTerms, contextOptions } = require('./speech-options');
 const MIMO_ENDPOINT = 'https://api.xiaomimimo.com/v1/chat/completions';
 const MIMO_VOICES = ['白桦', '苏打', '冰糖', '茉莉', 'Dean', 'Milo', 'Mia', 'Chloe'];
 
-const DEFAULT_AZURE_VOICE = 'en-GB-RyanNeural';
+const DEFAULT_AZURE_VOICE = 'en-GB-SoniaNeural';
 const DEFAULT_OPENROUTER_MODEL = 'hexgrad/kokoro-82m';
-const DEFAULT_OPENROUTER_VOICE = 'bm_george';
+const DEFAULT_OPENROUTER_VOICE = 'bf_emma';
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/audio/speech';
 const ONLINE_CHUNK_LIMITS = [200, 400, 800];
 const SPEECH_ENGINES = ['system', 'azure', 'openrouter', 'mimo', 'remote-cosyvoice', 'byok'];
 const OPENROUTER_DEFAULT_VOICES = Object.freeze({
   ...Object.fromEntries(ELEVENLABS_MODELS.map(([model, voice]) => [model, voice])),
-  'hexgrad/kokoro-82m': 'bm_george',
-  'microsoft/mai-voice-2': 'en-US-Ethan:MAI-Voice-2',
-  'microsoft/mai-voice-2-flash': 'en-US-Ethan:MAI-Voice-2-Flash',
-  'google/gemini-3.1-flash-tts-preview': 'Charon',
+  'hexgrad/kokoro-82m': 'bf_emma',
+  'microsoft/mai-voice-2': 'en-US-Harper:MAI-Voice-2',
+  'microsoft/mai-voice-2-flash': 'en-US-Harper:MAI-Voice-2',
+  'google/gemini-3.1-flash-tts-preview': 'Sulafat',
 });
 
 const MICROSOFT_VOICES = [
@@ -110,7 +110,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   remoteSecretName: '',
   mimoConsent: false,
   mimoSecretName: '',
-  mimoVoice: '白桦',
+  mimoVoice: '冰糖',
   byokProfile: Object.freeze(normalizeByokProfile()),
   volume: 1,
   rapidStart: false,
@@ -161,9 +161,9 @@ function normalizeOpenRouterModel(value) {
     : DEFAULT_OPENROUTER_MODEL;
 }
 
-function normalizeOpenRouterVoice(value) {
+function normalizeOpenRouterVoice(value, model = DEFAULT_OPENROUTER_MODEL) {
   const voice = String(value || '').trim();
-  return /^[a-z0-9][a-z0-9._:-]{0,199}$/i.test(voice) ? voice : DEFAULT_OPENROUTER_VOICE;
+  return /^[a-z0-9][a-z0-9._:-]{0,199}$/i.test(voice) ? voice : getDefaultOpenRouterVoice(model);
 }
 
 function normalizeSecretName(value) {
@@ -181,6 +181,7 @@ function normalizeChunkLimits(value) {
 
 function normalizeSettings(value) {
   const source = value && typeof value === 'object' ? value : {};
+  const openRouterModel = normalizeOpenRouterModel(source.openRouterModel);
   return {
     ...normalizeMiniSettings(source),
     ocrEnabled: source.ocrEnabled === true,
@@ -201,8 +202,8 @@ function normalizeSettings(value) {
     openRouterContext: source.openRouterContext === true,
     speechTermsEnabled: source.speechTermsEnabled === true,
     speechTerms: normalizedTerms(source.speechTerms),
-    openRouterModel: normalizeOpenRouterModel(source.openRouterModel),
-    openRouterVoice: normalizeOpenRouterVoice(source.openRouterVoice),
+    openRouterModel,
+    openRouterVoice: normalizeOpenRouterVoice(source.openRouterVoice, openRouterModel),
     openRouterSecretName: normalizeSecretName(source.openRouterSecretName),
     remoteConsent: source.remoteConsent === true,
     remoteEndpoint: String(source.remoteEndpoint || '').trim().slice(0, 2048),
@@ -210,7 +211,7 @@ function normalizeSettings(value) {
     remoteSecretName: normalizeSecretName(source.remoteSecretName),
     mimoConsent: source.mimoConsent === true,
     mimoSecretName: normalizeSecretName(source.mimoSecretName),
-    mimoVoice: MIMO_VOICES.includes(source.mimoVoice) ? source.mimoVoice : '白桦',
+    mimoVoice: MIMO_VOICES.includes(source.mimoVoice) ? source.mimoVoice : DEFAULT_SETTINGS.mimoVoice,
     byokProfile: normalizeByokProfile(source.byokProfile),
     volume: Number.isFinite(Number(source.volume)) && source.volume != null ? Math.max(0, Math.min(1, Number(source.volume))) : 1,
     rapidStart: source.rapidStart === true,
@@ -264,10 +265,11 @@ function buildAzureSsml(text, settings = {}) {
 }
 
 function buildOpenRouterRequestBody(text, settings = {}, context = {}) {
+  const model = normalizeOpenRouterModel(settings.openRouterModel);
   return {
-    model: normalizeOpenRouterModel(settings.openRouterModel),
+    model,
     input: String(text || ''),
-    voice: normalizeOpenRouterVoice(settings.openRouterVoice),
+    voice: normalizeOpenRouterVoice(settings.openRouterVoice, model),
     response_format: 'mp3',
     speed: 1,
     provider: {

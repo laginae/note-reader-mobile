@@ -3,6 +3,12 @@ const assert = require('node:assert/strict');
 const {BYOK_PROVIDERS,normalizeByokProfile,grantByokConsent,hasByokConsent,updateByokProfile,buildByokRequest,validateByokEndpoint} = require('../src/byok');
 
 const approved = provider => grantByokConsent(normalizeByokProfile({provider, ...BYOK_PROVIDERS[provider], voice:'voice-test',secretName:'tts-key'}));
+test('new compatible profiles use coral while existing voices and consent remain unchanged',()=>{
+  assert.equal(normalizeByokProfile().voice,'coral');
+  const old=grantByokConsent(normalizeByokProfile({voice:'onyx',secretName:'tts-key'}));
+  const restored=normalizeByokProfile(old);
+  assert.equal(restored.voice,'onyx'); assert.equal(restored.consent,old.consent); assert.ok(hasByokConsent(restored));
+});
 test('consent covers provider, destination, model, voice and secret reference',()=>{
   const profile=approved('openai-compatible'); assert.equal(hasByokConsent(profile),true);
   for (const patch of [{model:'other'},{voice:'other'},{secretName:'other-key'},{endpoint:'https://example.com/tts'}]) {

@@ -104,7 +104,7 @@ test('MiMo sends the complete assistant text, normal speed and selected voice', 
   });
   const body = JSON.parse(request.body);
   assert.equal(body.messages[1].content, text);
-  assert.equal(body.audio.voice, '白桦');
+  assert.equal(body.audio.voice, '冰糖');
   assert.equal(body.stream, false);
   assert.equal(result.mimeType, 'audio/wav');
   assert.equal(request.headers['api-key'], 'test-credential');
