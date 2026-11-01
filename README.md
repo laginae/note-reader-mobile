@@ -2,8 +2,6 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-> **Development branch:** The new voice defaults and 180-pixel mini-outline minimum described below are not yet included in a published release. Existing voice choices are preserved.
-
 A mobile-first read-aloud companion for Markdown notes, text-based PDFs and local HTML files in Obsidian.
 
 **Formerly Note and PDF Voice Reader for Mobile.** Same plugin, new name. Your settings and update path remain unchanged; no reinstall is required.
@@ -129,9 +127,9 @@ On phones, opening the reading bar temporarily keeps the current pane's native t
 
 **OpenRouter:** choose a secret, model and voice, then enable processing. **Azure:** also set the Speech resource region and cloud. Check your resource/provider privacy and retention settings; the plugin does not certify a service as no-training or ZDR merely because a key is configured.
 
-**BYOK:** one active configuration supports OpenAI-compatible speech, ElevenLabs or MiniMax. Fill in the endpoint, model, voice ID and secret reference, then explicitly confirm transmission, billing, training and retention risks. Changing the endpoint/provider clears the secret reference and consent without deleting the stored secret. Model, voice and secret-reference changes require renewed consent. Chat-only endpoints are not speech endpoints.
+**BYOK:** one active configuration supports OpenAI-compatible speech, ElevenLabs, MiniMax or experimental OpenAI Realtime. Fill in the endpoint, model, voice ID and secret reference, then explicitly confirm transmission, billing, training and retention risks. Changing the endpoint/provider clears the secret reference and consent without deleting the stored secret. Model, voice and secret-reference changes require renewed consent. Chat-only endpoints are not speech endpoints.
 
-The OpenAI-compatible example uses the `coral` voice. OpenAI has announced that `gpt-4o-mini-tts` will shut down on January 6, 2027; its recommended replacement uses a different Realtime API and cannot simply be substituted in this profile. See [OpenAI's deprecation notice](https://developers.openai.com/api/docs/deprecations). Other compatible services control their own model and voice availability.
+The OpenAI-compatible example uses the `coral` voice. OpenAI has announced that `gpt-4o-mini-tts` will shut down on January 6, 2027; settings warn affected official profiles. Select **OpenAI Realtime (experimental)** separately, re-select a secret and authorize it; do not just replace the old Speech model ID. Existing settings are not migrated. Each segment is buffered and its generated transcript checked before playback or WAV export; wording differences in numbers can cause rejection. Live OpenAI account, CORS and mobile-device validation are still pending; no latency or verbatim audio guarantee is made. [Setup and limitations](docs/openai-realtime.md) · [OpenAI's deprecation notice](https://developers.openai.com/api/docs/deprecations). Other compatible services control their own model and voice availability.
 
 Custom BYOK and remote CosyVoice requests use HTTPS, reject redirects, omit cookies and have no unsafe fallback. The service must allow requests from the mobile WebView (CORS); some endpoints may be unavailable. Test your actual device and endpoint. An authorization checkbox is not a provider privacy guarantee, and revocation cannot recall already-sent text.
 

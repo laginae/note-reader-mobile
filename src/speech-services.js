@@ -12,12 +12,16 @@ const {
 } = require('./config');
 const { MAX_AUDIO_BYTES, bytesOf, asAudio, decodeMimoAudio, decodeMinimaxAudio } = require('./audio-data');
 const { buildByokRequest, hasByokConsent, byokConsentFingerprint, getByokConfigurationError } = require('./byok');
+const { wavBytes } = require('./audio-export');
 const REQUEST_TIMEOUT_MS = 90000;
 
 // Custom destinations use fail-closed redirects. Never fall back to a transport
 // that could forward credentials to another origin when CORS rejects a request.
 async function guardedFetch(request, fetchFn = fetch) {
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  request.signal?.addEventListener('abort', abort, { once: true });
+  if (request.signal?.aborted) controller.abort();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let reader;
   try {
@@ -25,7 +29,7 @@ async function guardedFetch(request, fetchFn = fetch) {
       credentials: 'omit', redirect: 'error', cache: 'no-store', signal: controller.signal });
     if (!response.ok) return { status: response.status, headers: {}, arrayBuffer: new ArrayBuffer(0) };
     const declared = Number(response.headers.get('content-length'));
-    if (declared > MAX_AUDIO_BYTES) throw new Error('Response too large.');
+    if (declared > Math.min(MAX_AUDIO_BYTES, request.maximumBytes || MAX_AUDIO_BYTES)) throw new Error('Response too large.');
     if (!response.body?.getReader) throw new Error('Bounded response streaming unavailable.');
     reader = response.body.getReader();
     const parts = []; let length = 0;
@@ -33,7 +37,7 @@ async function guardedFetch(request, fetchFn = fetch) {
       const part = await reader.read();
       if (part.done) break;
       length += part.value.byteLength;
-      if (length > MAX_AUDIO_BYTES) throw new Error('Response too large.');
+      if (length > Math.min(MAX_AUDIO_BYTES, request.maximumBytes || MAX_AUDIO_BYTES)) throw new Error('Response too large.');
       parts.push(part.value);
     }
     const bytes = new Uint8Array(length); let offset = 0;
@@ -41,6 +45,7 @@ async function guardedFetch(request, fetchFn = fetch) {
     return { status: response.status, headers: { 'content-type': response.headers.get('content-type') || '' }, arrayBuffer: bytes.buffer };
   } finally {
     clearTimeout(timer);
+    request.signal?.removeEventListener('abort', abort);
     if (reader) { try { await reader.cancel(); } catch {} }
     controller.abort();
   }
@@ -180,11 +185,22 @@ async function synthesizeMimo(text, settings, app, requestFn = requestUrl) {
   return decodeMimoAudio(response.arrayBuffer);
 }
 
-async function synthesizeByok(text, settings, app, requestFn = guardedFetch) {
+async function synthesizeByok(text, settings, app, requestFn = guardedFetch, context = {}) {
   const profile = settings.byokProfile;
   const error = getByokConfigurationError(profile);
   if (error) throw new Error(error);
   const key = readSecret(app, profile?.secretName, 'BYOK');
+  if (profile.provider === 'openai-realtime') {
+    const { synthesizeRealtimePcm, realtimeError } = require('./openai-realtime');
+    const pcm = await synthesizeRealtimePcm({ profile, text, apiKey: key, assertAuthorized: context.assertCurrent,
+      requestJson: async (request, signal) => {
+        const response = await postResponse({ ...request, signal, maximumBytes: 65536 }, 'OpenAI Realtime', requestFn);
+        if (!/^application\/json(?:;|$)/i.test(response.headers?.['content-type'] || '')) throw realtimeError('credential');
+        try { return JSON.parse(new TextDecoder().decode(response.arrayBuffer)); }
+        catch { throw realtimeError('credential'); }
+      } });
+    return asAudio(wavBytes([pcm], 24000), true);
+  }
   const request = buildByokRequest(profile, text, key);
   const response = await postResponse(request, 'BYOK', requestFn);
   return profile.provider === 'minimax' ? decodeMinimaxAudio(response.arrayBuffer) : asAudio(response.arrayBuffer);
@@ -202,13 +218,14 @@ async function synthesizeOnlineChunk(text, settings, app, requestFn, getCurrentS
   const snapshot = normalizeSettings(settings);
   const signature = onlineConfiguration(snapshot);
   const assertCurrent = () => {
+    if (typeof context.isCurrent === 'function' && !context.isCurrent()) throw new Error('Reading stopped.');
     if (signature !== onlineConfiguration(getCurrentSettings())) throw new Error('Speech configuration or consent changed; playback stopped. / 语音配置或授权已更改，已停止播放。');
   };
   assertCurrent();
   if (typeof text !== 'string' || !text.trim() || text.length > (snapshot.speechEngine === 'mimo' ? 200 : 800)) throw new Error('Text exceeds this engine\'s chunk limit. / 文本超出当前引擎分段上限。');
   const engines = { azure: synthesizeAzure, openrouter: synthesizeOpenRouter, mimo: synthesizeMimo, byok: synthesizeByok, 'remote-cosyvoice': synthesizeRemoteCosyVoice };
   if (!Object.hasOwn(engines, snapshot.speechEngine)) throw new Error('The selected engine does not use an online audio endpoint.');
-  const audio = await engines[snapshot.speechEngine](text, snapshot, app, requestFn, context);
+  const audio = await engines[snapshot.speechEngine](text, snapshot, app, requestFn, { ...context, assertCurrent });
   assertCurrent();
   return audio;
 }

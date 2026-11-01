@@ -61,6 +61,7 @@ const { MAX_HTML_BYTES, isHtmlFile, extractHtmlText, extractHtmlTree, htmlReader
 const { AudioExportModal } = require('./audio-export-ui');
 const { synthesizeOnlineChunk, onlineConfiguration } = require('./speech-services');
 const { BYOK_PROVIDERS, updateByokProfile, hasByokConsent, grantByokConsent, getByokConfigurationError } = require('./byok');
+const { openAiSpeechNotice, REALTIME_VOICES } = require('./openai-speech-policy');
 
 const VIEW_TYPE = 'note-reader-mobile-control';
 const GITHUB_ISSUES_URL = 'https://github.com/laginae/note-reader-mobile/issues';
@@ -479,7 +480,8 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   getChunkLimits() {
-    const cap = this.settings.speechEngine === 'mimo' ? 200 : this.settings.speechEngine === 'system' ? Infinity : 800;
+    const cap = this.settings.speechEngine === 'mimo' || (this.settings.speechEngine === 'byok'
+      && this.settings.byokProfile?.provider === 'openai-realtime') ? 200 : this.settings.speechEngine === 'system' ? Infinity : 800;
     return parseChunkLimits(this.settings.chunkLimits, ONLINE_CHUNK_LIMITS).map((limit) => Math.min(limit, cap));
   }
 
@@ -1468,7 +1470,8 @@ class NoteReaderMobilePlugin extends Plugin {
     if (this.onlinePlans.has(index)) return this.onlinePlans.get(index);
     const settings = this.sessionSpeechSettings || this.settings;
     const opening = applyTerms(text, settings) === text ? splitOpeningAudioParts(text, settings.rapidStart === true) : [text];
-    const parts = opening.flatMap(value => fitSpeechParts(value, settings, settings.speechEngine === 'mimo' ? 200 : 800));
+    const cap = settings.speechEngine === 'mimo' || (settings.speechEngine === 'byok' && settings.byokProfile?.provider === 'openai-realtime') ? 200 : 800;
+    const parts = opening.flatMap(value => fitSpeechParts(value, settings, cap));
     const plan = parts.map((part, partIndex) => ({ text: part.text, key: `${this.sessionId}:${index}:${partIndex}`,
       context: adjacentContext(parts.map(entry => entry.source), partIndex,
         this.queue.items[index - 1]?.text || '', this.queue.items[index + 1]?.text || '') }));
@@ -1487,7 +1490,8 @@ class NoteReaderMobilePlugin extends Plugin {
       openRouterContext: snapshot.openRouterContext === true && this.settings.openRouterContext === true });
     return pool.get(part.key, async () => {
       const settings = currentSettings();
-      if (!settings.persistentAudioCache) return synthesizeOnlineChunk(part.text, settings, this.app, undefined, currentSettings, part.context);
+      const context = { ...part.context, isCurrent: () => sessionId === this.sessionId };
+      if (!settings.persistentAudioCache) return synthesizeOnlineChunk(part.text, settings, this.app, undefined, currentSettings, context);
       const signature = onlineConfiguration(settings);
       const prefix = settings.speechEngine === 'remote-cosyvoice' ? 'remote' : settings.speechEngine === 'openrouter' ? 'openRouter' : settings.speechEngine;
       const allowed = settings.speechEngine === 'byok' ? hasByokConsent(settings.byokProfile) : settings[prefix + 'Consent'] === true;
@@ -1499,7 +1503,7 @@ class NoteReaderMobilePlugin extends Plugin {
       if (sessionId !== this.sessionId || signature !== onlineConfiguration(currentSettings())) throw new Error('Speech configuration changed.');
       if (cached) { this.playbackTimings.count('deviceCacheHit'); return cached; }
       this.playbackTimings.count('deviceCacheMiss');
-      const audio = await synthesizeOnlineChunk(part.text, settings, this.app, undefined, currentSettings, part.context);
+      const audio = await synthesizeOnlineChunk(part.text, settings, this.app, undefined, currentSettings, context);
       if (sessionId === this.sessionId) void cache.put(key, audio, token);
       return audio;
     }, {
@@ -2161,8 +2165,15 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
     const settings = this.plugin.settings;
     let consentToggle;
     let secretComponent;
+    const notice = new Setting(containerEl).setName(label('OpenAI API notice', 'OpenAI 接口提醒'));
+    const refreshNotice = () => {
+      const message = openAiSpeechNotice(this.plugin.settings.byokProfile, zh);
+      notice.settingEl.hidden = !message; notice.setDesc(message);
+    };
+    refreshNotice();
     const update = async (patch) => {
       this.plugin.settings.byokProfile = updateByokProfile(this.plugin.settings.byokProfile, patch);
+      refreshNotice();
       consentToggle?.setValue(hasByokConsent(this.plugin.settings.byokProfile));
       secretComponent?.setValue(this.plugin.settings.byokProfile.secretName);
       await this.plugin.saveSettings();
@@ -2187,6 +2198,10 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
         this.display();
       });
     });
+    if (settings.byokProfile.provider === 'openai-realtime') new Setting(containerEl)
+      .setName(label('Experimental Realtime reading', '实验性 Realtime 朗读'))
+      .setDesc(label('Separate session per segment; no microphone or tools. Transcripts must match before audio is played or exported as WAV; numbers may fail this conservative check. Audio-token billing; no automatic retry or ZDR guarantee. Live account, CORS and device validation remain required.',
+        '每段独立会话，不使用麦克风或工具。转写核对一致后才播放或导出 WAV；数字读法差异也可能被拦截。按音频 token 计费，不自动重试、不保证 ZDR。仍需真实账户、CORS 和真机验证。'));
     const endpoint = new Setting(containerEl).setName(label('Speech endpoint', '语音接口地址'))
       .setDesc(label('HTTPS only, with browser CORS support. Redirects are refused. Changing the endpoint clears the selected secret and consent; no automatic fallback.', '仅支持 HTTPS，服务器须允许浏览器 CORS 请求。拒绝重定向；修改地址会清除密钥关联和授权，不自动回退。'));
     if (settings.byokProfile.provider === 'minimax') {
@@ -2199,7 +2214,15 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
       }));
     } else endpoint.setDesc(settings.byokProfile.endpoint);
     for (const [key, name] of [['model', ui.model], ['voice', label('Voice ID', '音色 ID')]]) {
-      new Setting(containerEl).setName(name).addText((text) => text.setValue(settings.byokProfile[key]).onChange((value) => update({ [key]: value })));
+      const row = new Setting(containerEl).setName(name);
+      if (settings.byokProfile.provider === 'openai-realtime' && key === 'voice') {
+        row.addDropdown(dropdown => {
+          for (const voice of REALTIME_VOICES) dropdown.addOption(voice, voice);
+          dropdown.setValue(settings.byokProfile.voice).onChange(value => update({ voice: value }));
+        });
+      } else row.addText((text) => text.setValue(settings.byokProfile[key])
+        .setDisabled(settings.byokProfile.provider === 'openai-realtime' && key === 'model')
+        .onChange((value) => update({ [key]: value })));
     }
     if (typeof SecretComponent === 'function' && this.app.secretStorage) {
       new Setting(containerEl).setName(ui.secret).addComponent((element) => {

@@ -1,6 +1,8 @@
 'use strict';
+const { REALTIME_ENDPOINT, REALTIME_MODEL, realtimeConfigurationError } = require('./openai-speech-policy');
 
 const BYOK_PROVIDERS = Object.freeze({
+  'openai-realtime': { name: 'OpenAI Realtime (experimental)', endpoint: REALTIME_ENDPOINT, model: REALTIME_MODEL, voice: 'coral', docs: 'https://developers.openai.com/api/docs/guides/realtime' },
   'openai-compatible': { name: 'OpenAI-compatible', endpoint: 'https://api.openai.com/v1/audio/speech', model: 'gpt-4o-mini-tts', voice: 'coral', docs: 'https://developers.openai.com/api/docs/guides/text-to-speech' },
   elevenlabs: { name: 'ElevenLabs', endpoint: 'https://api.elevenlabs.io/v1/text-to-speech', model: 'eleven_multilingual_v2', voice: '', docs: 'https://elevenlabs.io/docs/api-reference/text-to-speech/convert' },
   minimax: { name: 'MiniMax', endpoint: 'https://api.minimax.io/v1/t2a_v2', model: 'speech-2.8-hd', voice: '', docs: 'https://platform.minimax.io/docs/api-reference/speech-t2a-http' },
@@ -24,6 +26,7 @@ function validateByokEndpoint(profile) {
     throw new Error('BYOK: HTTPS only; no embedded credentials, query or fragment. / 地址须为 HTTPS，不能嵌入密钥、查询参数或片段。');
   }
   if (!Object.hasOwn(BYOK_PROVIDERS, profile.provider)) throw new Error('BYOK: unsupported API type. / 不支持的接口类型。');
+  if (profile.provider === 'openai-realtime' && url.href !== REALTIME_ENDPOINT) throw new Error('BYOK: use the fixed official OpenAI Realtime endpoint. / 请使用固定的 OpenAI Realtime 官方接口。');
   if (profile.provider === 'elevenlabs' && url.href !== BYOK_PROVIDERS.elevenlabs.endpoint) throw new Error('BYOK: use the official ElevenLabs preset endpoint.');
   if (profile.provider === 'minimax' && !['https://api.minimax.io/v1/t2a_v2', 'https://api.minimaxi.com/v1/t2a_v2'].includes(url.href)) throw new Error('BYOK: use the MiniMax international or China preset endpoint.');
   return url.href;
@@ -45,6 +48,8 @@ function hasByokConsent(profile) {
 function getByokConfigurationError(profile, requireConsent = true) {
   if (!profile) return 'BYOK: configure a speech API first. / 请先配置语音接口。';
   try { validateByokEndpoint(profile); } catch (error) { return error.message; }
+  const realtimeError = realtimeConfigurationError(profile);
+  if (realtimeError) return realtimeError;
   if (!profile.model || !profile.voice || /[\r\n]/.test(profile.model + profile.voice)) return 'BYOK: enter a model and voice ID. / 请填写模型和音色 ID。';
   if (!profile.secretName) return 'BYOK: select an Obsidian secret. / 请选择 Obsidian 秘密。';
   if (requireConsent && !hasByokConsent(profile)) return 'BYOK: confirm processing and billing risks for this configuration. / 请确认此配置的数据处理及费用风险。';
@@ -66,6 +71,7 @@ function updateByokProfile(profile, patch) {
 }
 
 function buildByokRequest(profile, text, apiKey) {
+  if (profile?.provider === 'openai-realtime') throw new Error('BYOK: use the separate Realtime transport.');
   const error = getByokConfigurationError(profile);
   if (error) throw new Error(error);
   if (!apiKey || /[\r\n]/.test(apiKey)) throw new Error('BYOK: invalid credential.');

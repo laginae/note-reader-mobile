@@ -4,8 +4,6 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-> **开发版说明：** 下文的新默认音色和迷你目录 180 像素宽度下限尚未包含在已发布版本中；已有音色选择不受影响。
-
 这是面向 Obsidian 手机和平板端的笔记、PDF 与本地 HTML 朗读插件。
 
 **原名 Note and PDF Voice Reader for Mobile。** 仅名称变更，已有设置保留，可直接更新，无需重新安装。
@@ -127,9 +125,9 @@
 
 **OpenRouter：** 选择秘密、模型、音色，再允许处理。**Azure：** 还需填写 Speech 资源区域和云环境。请核对资源或服务商适用的隐私与保留政策；填写密钥不代表插件认证了“不训练”或“ZDR”。
 
-**BYOK：** 支持一个当前配置，类型包括 OpenAI 兼容语音接口、ElevenLabs、MiniMax。填写地址、模型、音色 ID 和秘密引用后，需要明确确认传输、计费、训练及保留风险。修改地址或服务商会清除秘密引用和授权，但不会删除已保存的秘密；修改模型、音色和秘密引用也需重新授权。仅支持聊天的接口不能当作语音接口使用。
+**BYOK：** 支持一个当前配置，类型包括 OpenAI 兼容语音接口、ElevenLabs、MiniMax，以及实验性 OpenAI Realtime。填写地址、模型、音色 ID 和秘密引用后，需要明确确认传输、计费、训练及保留风险。修改地址或服务商会清除秘密引用和授权，但不会删除已保存的秘密；修改模型、音色和秘密引用也需重新授权。仅支持聊天的接口不能当作语音接口使用。
 
-OpenAI 兼容示例默认音色为 `coral`。[OpenAI 公告](https://developers.openai.com/api/docs/deprecations)称其 `gpt-4o-mini-tts` 模型将于 2027 年 1 月 6 日停用；官方推荐的替代模型使用不同的 Realtime 接口，不能仅在此配置中替换模型名。其他兼容服务的模型和音色由各自提供商决定。
+OpenAI 兼容示例默认音色为 `coral`。[OpenAI 公告](https://developers.openai.com/api/docs/deprecations)称其 `gpt-4o-mini-tts` 模型将于 2027 年 1 月 6 日停用，设置会提醒受影响的官方配置。请单独选择 **OpenAI Realtime（实验性）**，重新选择秘密并授权；不能只在旧 Speech 配置中替换模型名，也不会自动迁移。每段独立缓冲，核对生成转写后才播放或导出 WAV；数字读法差异也可能被拦截。真实账户、CORS 及移动真机验证尚待完成，不保证更快或音频逐字无误。[配置与限制](docs/openai-realtime.zh-CN.md)。其他兼容服务的模型和音色由各自提供商决定。
 
 BYOK 和远程 CosyVoice 使用 HTTPS、拒绝重定向、不携带 Cookie，不会退回绕过这些限制的方式。接口必须允许移动 WebView 的跨域请求（CORS），部分服务可能不可用，需以实际手机和接口验证为准。用户授权不是服务商隐私保证，撤销也不能收回已发送的文本。
 
