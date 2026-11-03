@@ -12,6 +12,18 @@ function fixture() {
     locateOutlineEntry:async(...args)=>calls.push(['locate',...args])};
   return {adapter:mobileMiniAdapter(plugin),plugin,view,file,text,calls};
 }
+
+test('mobile pause adapter reuses queue controls and never treats export or completed audio as playable', () => {
+  const f=fixture();assert.equal(f.adapter.playback().active,false);
+  f.plugin.queue={items:[{}],status:'synthesizing'};f.plugin.sessionId=7;f.plugin.sourceLabel='Public sample';
+  assert.deepEqual(f.adapter.playback(),{active:true,session:7,paused:false,canToggle:true,canStop:true,title:'Public sample'});
+  f.plugin.togglePause=()=>{f.plugin.pauseRequested=true;};f.adapter.togglePlayback();assert.equal(f.adapter.playback().paused,true);
+  let stopped;f.plugin.stopReading=options=>{stopped=options;};f.adapter.stopPlayback();assert.deepEqual(stopped,{quiet:true});
+  f.plugin.phaseOverride='extracting';assert.equal(f.adapter.playback().canToggle,false);f.plugin.phaseOverride='';
+  f.plugin.queue.status='complete';assert.equal(f.adapter.playback().active,false);
+  f.plugin.queue.status='paused';f.plugin.exportModal={busy:true};assert.equal(f.adapter.playback().active,false);
+  assert.deepEqual(f.calls,[]);
+});
 test('mobile reads current editor without a vault read and section choice retains exact bounds',async()=>{
   const f=fixture(),data=await f.adapter.load(f.view,()=>false);
   assert.equal(data.entries.length,3);await f.adapter.locate(f.view,data,1);assert.equal(f.calls.at(-1)[0],'locate');

@@ -111,6 +111,10 @@ test('reading menu and floating icon preferences do not interrupt playback', asy
   plugin.settings.miniOutlineWidth=420;
   plugin.settings.miniOutlineTitleLines=1;
   plugin.settings.miniOutlineStartup=true;
+  plugin.settings.miniOutlinePlaybackDisplay='session';
+  plugin.settings.miniOutlineCollapsedStyle='rail';
+  plugin.settings.floatingPauseButton=true;
+  plugin.settings.floatingStopButton=false;
   await plugin.saveSettings();
   assert.equal(stops,0);
   assert.equal(plugin.saved.at(-1).readingFloatingAction,'from-selection');
@@ -125,7 +129,7 @@ test('playback settings put shortcuts before the compact outline group without r
   const rows=elements.flatMap(el=>el.rows||[]), lines=rows.find(row=>row.name==='Heading display lines');
   assert.ok(advanced); assert.notEqual(advanced.open,true); assert.equal(advanced.contains(lines.settingEl),false);
   assert.equal(lines.input.value,'4'); assert.equal(plugin.settings.miniOutlineSide,'left'); assert.equal(plugin.settings.miniOutlineTransparent,true);
-  for (const name of ['Outline side','Default expanded levels','Transparent background','Double-click heading to read','Open outline on hover']) assert.ok(advanced.contains(rows.find(row=>row.name===name).settingEl),name);
+  for (const name of ['Collapsed appearance','Playback button visibility','Outline side','Default expanded levels','Transparent background','Double-click heading to read','Open outline icon on hover']) assert.ok(advanced.contains(rows.find(row=>row.name===name).settingEl),name);
 });
 
 function sourceFixture(plugin, extension = 'md') {

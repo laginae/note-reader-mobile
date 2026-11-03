@@ -7,7 +7,8 @@ test('mobile formula reader supports named ranges with ell and min/max script la
   assert.equal(mathSpeech(String.raw`[\ell,u]`, {mathReadingLanguage:'chinese'}), 'ell 到 u');
   assert.equal(mathSpeech(String.raw`[E_{\min}+R_{\infty}z_{\mathrm d},\ E_{\max}-R_{\infty}z_{\mathrm c}]`),
     'E min plus R infinity times z d to E max minus R infinity times z c');
-  assert.equal(mathSpeech('[x,y]'), 'open bracket x,y close bracket');
+  assert.equal(mathSpeech('[x,y]'), 'x, y');
+  assert.equal(mathSpeech('[x,y]', {academicMathStyle:'verbose'}), 'open bracket x,y close bracket');
 });
 
 test('mobile formula reader reads font-wrapped variables without weakening skip settings', () => {

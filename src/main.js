@@ -475,7 +475,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   speechConfigurationKey() {
-    const { miniOutlineMode, miniOutlineSide, miniOutlineHover, miniOutlineDepth, miniOutlineTransparent, miniOutlineDoubleClick, miniOutlineWidth, miniOutlineTitleLines, miniOutlineStartup, ocrEnabled, readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
+    const { miniOutlineMode, miniOutlineSide, miniOutlineHover, miniOutlineDepth, miniOutlineTransparent, miniOutlineDoubleClick, miniOutlineWidth, miniOutlineTitleLines, miniOutlineStartup, miniOutlinePlaybackDisplay, miniOutlineCollapsedStyle, floatingPauseButton, floatingStopButton, ocrEnabled, readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
     return JSON.stringify(speech);
   }
 

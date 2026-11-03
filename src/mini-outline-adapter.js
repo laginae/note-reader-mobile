@@ -22,6 +22,14 @@ function mobileMiniAdapter(plugin) {
     views: () => ['markdown', 'pdf', 'html-view'].flatMap(type => (workspace.getLeavesOfType?.(type) || []).map(leaf => leaf.view)),
     activeView: () => plugin.getSourceLeaf()?.view,
     busy: () => Boolean(plugin.exportModal?.busy), valid,
+    playback: () => {
+      const active = !!plugin.queue?.items.length && !['complete', 'error'].includes(plugin.queue.status) && !plugin.exportModal?.busy;
+      return { active, session: plugin.sessionId, paused: !!plugin.pauseRequested,
+        canToggle: active && plugin.phaseOverride !== 'extracting', canStop: active, title: plugin.sourceLabel };
+    },
+    togglePlayback: () => plugin.togglePause(),
+    stopPlayback: () => plugin.stopReading({ quiet: true }),
+    playbackError: error => plugin.fail(error),
     async load(view, cancelled, force) {
       const file = view.file, key = plugin.documentOutlineKey(file);
       let data;
