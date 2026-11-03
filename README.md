@@ -4,6 +4,8 @@
 
 A mobile-first read-aloud companion for Markdown notes, text-based PDFs and local HTML files in Obsidian.
 
+**Read from a compact mini outline.** Navigate chapters, start a section from **Outline options**, and pause/resume in the outline header without opening the main playback bar. Touch controls stay visible. [See the desktop walkthrough of this workflow](https://github.com/laginae/note-reader-cosyvoice#read-from-the-mini-outline); it is not a phone recording, and current-release physical-device validation remains pending.
+
 **Formerly Note and PDF Voice Reader for Mobile.** Same plugin, new name. Your settings and update path remain unchanged; no reinstall is required.
 
 ## Quick Demos
@@ -34,6 +36,7 @@ This earlier demo shows the full outline dialog, still available from the **Open
 
 ## Highlights
 
+- **Mini outline playback:** choose a heading, use the top **Outline options** to read that section or continue from it, then pause/resume in the same panel. Tapping a title alone only navigates. Search and pin the outline without opening the main playback bar; no double-tap gesture is required.
 - **Optional OCR (experimental):** off by default, with a separately installed resource pack and single-page recognition. Read printed text in scanned PDFs and PNG/JPEG/WebP after editing the preview. No image upload, no model load at startup. Physical iPhone/iPad/Android validation is pending. [Setup and device checklist](docs/local-ocr.md).
 
 - **Read beside your document:** touch-sized controls with pause, Stop, speed and current-audio seeking.
@@ -41,7 +44,7 @@ This earlier demo shows the full outline dialog, still available from the **Open
 - **Editor menu:** Markdown Live Preview/Source context menus offer Read aloud from here and Read selected text. Mobile availability depends on Obsidian exposing its editor menu; the system selection popup is not replaced. Existing toolbar actions remain available for PDF, HTML and reading views.
 - **Academic PDF reading:** column-aware text ordering, optional header/footer filtering, and conservative footnote separation, including first-page correspondence blocks.
 - **PDF formula handling:** when Strip Markdown is enabled, local font evidence can repair known math-font encoding errors. Smart mode skips complex equations while retaining readable short expressions. Full-file, section and selected-text reading use the same rules; ambiguous selections ask you to select again rather than read nearby text. This is not OCR or a guarantee for every PDF font.
-- **Document outlines:** navigate Markdown headings, HTML h1-h6 headings and PDF bookmarks/inferred headings. Clicking a title locates the source without starting speech. The adjacent range button selects a section for Read section or Read from section.
+- **Document outlines:** navigate Markdown headings, HTML h1-h6 headings and PDF bookmarks/inferred headings. Tapping a title locates the source without starting speech. The mini outline's top **Outline options** provides the separate section-reading actions.
 - **Sentence-first chunks:** move a complete sentence to the next chunk when it cannot fit; split only oversized sentences at clause/word boundaries within the provider cap. Conservatively join PDF cross-page continuations.
 - **Local HTML:** open files with HTML Reader, then read the whole file, a selection or from a selected position.
 - **WAV export:** save an online-engine reading range to the vault after explicit confirmation.
