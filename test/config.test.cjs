@@ -33,6 +33,13 @@ test('defaults to local system speech and stores no credential value', () => {
   assert.equal(Object.keys(DEFAULT_SETTINGS).some((key) => /apiKey|subscriptionKey/i.test(key)), false);
 });
 
+test('floating seek controls are strictly opt-in and preserve other floating preferences',()=>{
+  assert.equal(DEFAULT_SETTINGS.floatingSeekButtons,false);
+  for(const value of [undefined,false,'true',1])assert.equal(normalizeSettings({floatingSeekButtons:value}).floatingSeekButtons,false);
+  const settings=normalizeSettings({floatingSeekButtons:true,floatingPauseButton:true,floatingStopButton:false});
+  assert.equal(settings.floatingSeekButtons,true);assert.equal(settings.floatingPauseButton,true);assert.equal(settings.floatingStopButton,false);
+});
+
 test('PDF edge filtering defaults on for new and existing settings but can be disabled', () => {
   assert.equal(DEFAULT_SETTINGS.pdfSkipHeaders, true);
   assert.equal(normalizeSettings({}).pdfSkipHeaders, true);

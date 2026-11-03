@@ -25,12 +25,14 @@ function mobileMiniAdapter(plugin) {
     playback: () => {
       const active = !!plugin.queue?.items.length && !['complete', 'error'].includes(plugin.queue.status) && !plugin.exportModal?.busy;
       return { active, session: plugin.sessionId, paused: !!plugin.pauseRequested,
-        canToggle: active && plugin.phaseOverride !== 'extracting', canStop: active, title: plugin.sourceLabel };
+        canToggle: active && plugin.phaseOverride !== 'extracting', canStop: active, canSeek: active && !!plugin.canSeekAudio?.(), title: plugin.sourceLabel };
     },
     togglePlayback: () => plugin.togglePause(),
     stopPlayback: () => plugin.stopReading({ quiet: true }),
+    seekPlaybackBy: seconds => plugin.seekAudioBy(seconds),
     playbackError: error => plugin.fail(error),
-    async load(view, cancelled, force) {
+    loadCollapsed: (view, cancelled) => adapter.load(view, cancelled, false, true),
+    async load(view, cancelled, force, cachedOnly = false) {
       const file = view.file, key = plugin.documentOutlineKey(file);
       let data;
       if (['md', 'markdown'].includes(file.extension)) {
@@ -44,7 +46,8 @@ function mobileMiniAdapter(plugin) {
         const extracted = extractHtmlTree(doc.body, null, options);
         data = { kind: 'html', doc, text: extracted.text, entries: extracted.headings, options };
       } else {
-        const cached = await plugin.loadPdfOutline(file, cancelled, () => {}, force);
+        const cached = cachedOnly ? (plugin.pdfOutlineCache?.key === key ? plugin.pdfOutlineCache : null)
+          : await plugin.loadPdfOutline(file, cancelled, () => {}, force);
         if (!cached) return null;
         data = { ...cached.data, kind: cached.data.kind || 'pdf' };
       }

@@ -16,13 +16,25 @@ function fixture() {
 test('mobile pause adapter reuses queue controls and never treats export or completed audio as playable', () => {
   const f=fixture();assert.equal(f.adapter.playback().active,false);
   f.plugin.queue={items:[{}],status:'synthesizing'};f.plugin.sessionId=7;f.plugin.sourceLabel='Public sample';
-  assert.deepEqual(f.adapter.playback(),{active:true,session:7,paused:false,canToggle:true,canStop:true,title:'Public sample'});
+  assert.deepEqual(f.adapter.playback(),{active:true,session:7,paused:false,canToggle:true,canStop:true,canSeek:false,title:'Public sample'});
   f.plugin.togglePause=()=>{f.plugin.pauseRequested=true;};f.adapter.togglePlayback();assert.equal(f.adapter.playback().paused,true);
   let stopped;f.plugin.stopReading=options=>{stopped=options;};f.adapter.stopPlayback();assert.deepEqual(stopped,{quiet:true});
+  const seeks=[];f.plugin.canSeekAudio=()=>true;f.plugin.seekAudioBy=seconds=>seeks.push(seconds);
+  assert.equal(f.adapter.playback().canSeek,true);f.adapter.seekPlaybackBy(-5);f.adapter.seekPlaybackBy(5);assert.deepEqual(seeks,[-5,5]);
   f.plugin.phaseOverride='extracting';assert.equal(f.adapter.playback().canToggle,false);f.plugin.phaseOverride='';
   f.plugin.queue.status='complete';assert.equal(f.adapter.playback().active,false);
   f.plugin.queue.status='paused';f.plugin.exportModal={busy:true};assert.equal(f.adapter.playback().active,false);
   assert.deepEqual(f.calls,[]);
+});
+
+test('collapsed PDF outlines never request extraction and only accept a current cached model',async()=>{
+  const f=fixture();assert.equal((await f.adapter.loadCollapsed(f.view,()=>false)).entries.length,3);
+  f.file.extension='pdf';f.plugin.loadPdfOutline=()=>{throw Error('Must not parse a PDF for collapsed lines');};
+  assert.equal(await f.adapter.loadCollapsed(f.view,()=>false),null);
+  const entries=[{title:'Public cached section',level:1,page:1}];
+  f.plugin.pdfOutlineCache={key:'1',data:{entries,pages:[]}};
+  assert.equal((await f.adapter.loadCollapsed(f.view,()=>false)).entries,entries);
+  f.file.stat.mtime++;assert.equal(await f.adapter.loadCollapsed(f.view,()=>false),null);assert.deepEqual(f.calls,[]);
 });
 test('mobile reads current editor without a vault read and section choice retains exact bounds',async()=>{
   const f=fixture(),data=await f.adapter.load(f.view,()=>false);
