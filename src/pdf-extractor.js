@@ -35,7 +35,7 @@ async function extractPdfDocument(app, file, options = {}) {
   const data = binary instanceof Uint8Array
     ? new Uint8Array(binary.buffer, binary.byteOffset, binary.byteLength)
     : new Uint8Array(binary);
-  const loadingTask = pdfjsLib.getDocument({ data });
+  const loadingTask = pdfjsLib.getDocument(require('./pdf-document-options').pdfDocumentOptions(data));
   let document = null;
 
   try {

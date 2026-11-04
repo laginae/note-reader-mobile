@@ -141,7 +141,12 @@ test('outline extraction attaches font/footnote metadata and releases PDF resour
     getPage: async () => ({ getTextContent: async () => ({ items: [item('1. Introduction', 40, 700, 12), item(paragraph, 40, 680)] }),
       getViewport: () => viewport, cleanup: () => { cleaned += 1; } }), destroy: async () => { destroyed += 1; } };
   const result = await extractPdfDocument({ vault: { readBinary: async () => new ArrayBuffer(4) } }, { extension: 'pdf' },
-    { includeOutline: true, loadPdfJs: async () => ({ getDocument: () => ({ promise: Promise.resolve(pdf) }) }) });
+    { includeOutline: true, loadPdfJs: async () => ({ getDocument: (options) => {
+      assert.equal(options.cMapUrl, '/lib/pdfjs/cmaps/');
+      assert.equal(options.cMapPacked, true);
+      assert.equal(options.standardFontDataUrl, '/lib/pdfjs/standard_fonts/');
+      return { promise: Promise.resolve(pdf) };
+    } }) });
   assert.equal(result.bookmarks.length, 1);
   assert.ok(result.pages[0].layout.lines[0].fontSize > 0);
   assert.equal(cleaned, 1); assert.equal(destroyed, 1);

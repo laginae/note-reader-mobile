@@ -1,32 +1,11 @@
 'use strict';
+const { outlineTypography, detectPdfHeadings } = require('./pdf-outline-detection');
 
 const NUMBERED = /^(\d+(?:\.\d+)*\.?|[IVXLC]+[.)]|第[一二三四五六七八九十\d]+[章节])\s+(.+)/;
 const normalize = (text) => String(text).normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 
 function outlineLayout(layout, items, styles = {}, viewport = {}) {
-  const positioned = (items || []).filter((item) => item.str?.trim() && item.transform);
-  const sizes = new Map();
-  for (const item of positioned) {
-    const size = Math.round(Math.abs(item.height || item.transform[3]) * 10) / 10;
-    if (size > 0) sizes.set(size, (sizes.get(size) || 0) + item.str.length);
-  }
-  const bodySize = [...sizes].sort((a, b) => b[1] - a[1])[0]?.[0] || 10;
-  const bands = new Map(), bandHeight = bodySize * .6;
-  for (const item of positioned) {
-    const band = Math.floor(item.transform[5] / bandHeight);
-    if (!bands.has(band)) bands.set(band, []);
-    bands.get(band).push(item);
-  }
-  const origin = Number(viewport.viewBox?.[1]) || 0;
-  const height = viewport.viewBox ? viewport.viewBox[3] - origin : viewport.height;
-  const lines = layout.lines.map((line) => {
-    const band = Math.floor(line.y / bandHeight);
-    const parts = [band - 1, band, band + 1].flatMap((key) => bands.get(key) || []).filter((item) => Math.abs(item.transform[5] - line.y) <= bandHeight
-      && item.transform[4] >= line.xMin - 2 && item.transform[4] <= line.xMax + 2);
-    return { ...line, fontSize: parts.reduce((max, item) => Math.max(max, Math.abs(item.height || item.transform[3])), 0),
-      bold: parts.some((item) => /bold|black|demi/i.test(styles[item.fontName]?.fontFamily || item.fontName || '')) };
-  });
-  return { ...layout, lines, bodySize, origin, height, rotated: !!((Number(viewport.rotation) || 0) % 360) };
+  return outlineTypography(layout, items, styles, viewport);
 }
 
 function indexedPages(pages) {
@@ -78,37 +57,7 @@ async function resolvePdfBookmarks(pdf, isCancelled = () => false) {
 }
 
 function inferEntries(pages) {
-  const repeats = new Map();
-  for (const page of pages) for (const line of page.layout.lines) {
-    const y = (line.y - page.layout.origin) / page.layout.height;
-    if (y > .93 || y < .07) {
-      const key = line.text.replace(/\d+/g, '#').trim();
-      if (!repeats.has(key)) repeats.set(key, new Set());
-      repeats.get(key).add(page.pageNumber);
-    }
-  }
-  const entries = [];
-  for (const page of pages) {
-    if (page.layout.rotated) continue;
-    for (const line of page.layout.lines) {
-      const text = line.text.trim(), y = (line.y - page.layout.origin) / page.layout.height;
-      const body = page.layout.bodySize || 10;
-      if (line.footnote || line.offset < 0 || text.length < 3 || text.length > 180 || y < .04 || y > .97) continue;
-      if ((repeats.get(text.replace(/\d+/g, '#'))?.size || 0) > 1) continue;
-      if (/^(?:fig(?:ure)?\.?|table|equation|eq\.?|图|表)\s*[\dIVX]/i.test(text) || /^\(?[\d.]+\)?$/.test(text)) continue;
-      const numbered = text.match(NUMBERED);
-      const semantic = /^(abstract|introduction|conclusions?|references|acknowledg(?:e)?ments?|appendix(?:\s+[A-Z])?|摘要|引言|结论|参考文献)$/i.test(text);
-      const prominent = line.bold || line.fontSize >= body * 1.25;
-      if (line.fontSize < body * .94) continue;
-      if (!numbered && !semantic && (page.pageNumber === 1 || !prominent || text.length >= 90 || /[.;:,@]/.test(text))) continue;
-      if (numbered && (/^\d{4}\b/.test(text) || (/^\d+\s/.test(text) && (!prominent || text.length > 80)))) continue;
-      const title = numbered ? `${numbered[1]} ${numbered[2].match(/^(.+?\.)\s+(?=[A-Z])/)?.[1] || numbered[2]}` : text;
-      entries.push({ title, level: numbered && /^\d/.test(numbered[1]) ? Math.min(6, numbered[1].replace(/\.$/, '').split('.').length) : 1,
-        page: page.pageNumber, offset: line.offset, inferred: true });
-      if (entries.length >= 1000) return entries;
-    }
-  }
-  return entries;
+  return detectPdfHeadings(pages.map(page => ({ ...page.layout, number: page.pageNumber })));
 }
 
 function buildPdfOutline(rawPages, bookmarks = []) {
