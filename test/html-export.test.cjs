@@ -17,6 +17,13 @@ test('HTML tables honor academic omission settings and explicit all mode', () =>
   assert.match(extractHtmlText(table, { academicTableMode: 'all' }), /19; 29;/);
 });
 
+test('structured HTML tables honor header repetition without changing complex layouts', () => {
+  const html = '<table><tr><th>Item</th><th>Count</th></tr><tr><td>Apples</td><td>2</td></tr></table>';
+  assert.match(extractHtmlText(html, { academicTableMode: 'all', academicTableRepeatHeaders: true }), /Item: Apples; Count: 2/);
+  assert.match(extractHtmlText(html, { academicTableMode: 'all', academicTableRepeatHeaders: false }), /Row 1\. Apples; 2/);
+  assert.doesNotMatch(extractHtmlText(html.replace('<td>Apples', '<td colspan="2">Apples'), { academicTableMode: 'all', academicTableRepeatHeaders: true }), /Row 1/);
+});
+
 test('rendered HTML ranges start at the selected duplicate, not the first occurrence', () => {
   const root = parseDocument('<p>Duplicate sentence.</p><p>Duplicate sentence.</p><p>Final sentence.</p>');
   const node = root.children[1].children[0];

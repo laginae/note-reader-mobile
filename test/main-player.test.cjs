@@ -774,6 +774,18 @@ test('floating rate and volume feedback uses one short notice without changing t
   t.mock.timers.tick(1); assert.equal(notice.hidden, true); assert.equal(plugin.sessionId, session);
 });
 
+test('mobile table header switch persists independently in both languages', async () => {
+  for (const settingsLanguage of ['english', 'chinese']) {
+    const plugin = fixture({ settingsLanguage, academicTableMode: 'smart' });
+    plugin.saveSettings = async () => { plugin.settings = normalizeSettings(plugin.settings); };
+    const tab = new loaded.__test.NoteReaderMobileSettingTab(plugin.app, plugin); tab.activeTab = 'academic'; tab.display();
+    const rows = tab.containerEl.all().flatMap(element => element.rows || []);
+    const row = rows.find(row => row.name === (settingsLanguage === 'chinese' ? '每行重复表头' : 'Repeat table headers for each row'));
+    assert.ok(row); assert.equal(row.input.value, true); await row.input.change(false);
+    assert.equal(plugin.settings.academicTableRepeatHeaders, false); assert.equal(plugin.settings.academicTableMode, 'smart');
+  }
+});
+
 test('academic reading uses core opt-in settings only when Markdown stripping is enabled', () => {
   const plugin = fixture();
   assert.match(plugin.prepareText('研究[2][4]。 $x_i$'), /文献2和4/);

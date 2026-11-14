@@ -2133,6 +2133,12 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }));
     }
+    new Setting(containerEl).setName(label('Repeat table headers for each row', '每行重复表头'))
+      .setDesc(label('On by default. Disable to read column headings once, then row numbers and values. Empty cells retain a placeholder; smart skipping is unchanged. PDF headings are not guessed. Applies next session.', '默认开启。关闭后只在开头读一次表头，后续读行号和数据；空单元格保留占位，智能跳过策略不变。PDF 不强行推断表头，下次朗读生效。'))
+      .addToggle(toggle => toggle.setValue(options.academicTableRepeatHeaders).onChange(async value => {
+        this.plugin.settings.academicTableRepeatHeaders = value;
+        await this.plugin.saveSettings();
+      }));
     new Setting(containerEl).setName(label('Formula wording', '公式用词'))
       .addDropdown((dropdown) => dropdown.addOption('concise', 'sub / bar').addOption('verbose', label('Expanded wording', '完整术语'))
         .setValue(options.academicMathStyle).onChange(async (value) => {

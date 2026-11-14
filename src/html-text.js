@@ -1,6 +1,6 @@
 'use strict';
 const { parseDocument } = require('htmlparser2');
-const { skipTable, omission } = require('@laginae/note-reader-core');
+const { skipTable, omission, formatTableForSpeech } = require('@laginae/note-reader-core');
 const MAX_HTML_BYTES = 20 * 1024 * 1024, MAX_HTML_TEXT = 2_000_000, MAX_HTML_NODES = 100_000;
 const OMIT = new Set(['head', 'script', 'style', 'template', 'noscript', 'svg', 'canvas', 'iframe', 'object', 'embed', 'audio', 'video', 'nav', 'footer', 'form', 'input', 'button', 'select', 'textarea']);
 const BLOCK = new Set(['address', 'article', 'aside', 'blockquote', 'caption', 'dd', 'details', 'div', 'dl', 'dt', 'figcaption', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li', 'main', 'ol', 'p', 'pre', 'section', 'summary', 'table', 'tr', 'ul']);
@@ -14,7 +14,7 @@ function info(node) {
     || attr('aria-hidden') === 'true' || /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:!important)?\s*(?:;|$)/i.test(attr('style') || '') };
 }
 function tableSummary(root, options) {
-  const rows = [], stack = [{ node: root }]; let count = 0, caption = '';
+  const rows = [], stack = [{ node: root }]; let count = 0, caption = '', simple = true;
   while (stack.length) {
     if (++count > MAX_HTML_NODES) throw new Error('HTML element limit exceeded.');
     const { node, row, cell, inCaption } = stack.pop(), data = info(node);
@@ -23,13 +23,20 @@ function tableSummary(root, options) {
     if (data.tag === 'table' && node !== root) return null;
     const nextRow = data.tag === 'tr' ? [] : row;
     if (data.tag === 'tr') rows.push(nextRow);
-    const nextCell = ['td', 'th'].includes(data.tag) && nextRow ? { text: '' } : cell;
+    if (['td','th'].includes(data.tag)) for (const name of ['colspan','rowspan']) {
+      const span = node.getAttribute?.(name) ?? node.attribs?.[name];
+      if (span != null && String(span) !== '1') simple = false;
+    }
+    const nextCell = ['td', 'th'].includes(data.tag) && nextRow ? { text: '', header: data.tag === 'th' } : cell;
     if (nextCell !== cell) nextRow.push(nextCell);
     for (const child of [...data.children].reverse()) stack.push({ node: child, row: nextRow, cell: nextCell, inCaption: inCaption || data.tag === 'caption' });
   }
   const values = rows.map((row) => row.map((cell) => cell.text.trim()));
-  return values.length && skipTable(values[0], values.slice(1), options)
-    ? [caption.trim(), omission('table', options, values.flat().join(' '))].filter(Boolean).join('\n') : null;
+  if (!values.length) return null;
+  if (skipTable(values[0], values.slice(1), options)) return [caption.trim(), omission('table', options, values.flat().join(' '))].filter(Boolean).join('\n');
+  if (!simple || typeof options.academicTableRepeatHeaders !== 'boolean') return null;
+  const hasHeader = rows[0].length && rows[0].every(cell => cell.header);
+  return [caption.trim(), formatTableForSpeech(hasHeader ? values[0] : [], hasHeader ? values.slice(1) : values, options)].filter(Boolean).join('\n');
 }
 function extractHtmlTree(root, range = null, options = {}) {
   const pieces = [], headings = [], stack = [{ node: root }]; let count = 0, length = 0, start = null, end = null;
