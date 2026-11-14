@@ -450,6 +450,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   onunload() {
+    this.hidePlaybackControlNotice();
     this.ocrModal?.close();
     this.readingHighlights?.dispose();
     this.exportModal?.close();
@@ -475,7 +476,7 @@ class NoteReaderMobilePlugin extends Plugin {
   }
 
   speechConfigurationKey() {
-    const { miniOutlineMode, miniOutlineSide, miniOutlineHover, miniOutlineDepth, miniOutlineTransparent, miniOutlineDoubleClick, miniOutlineWidth, miniOutlineTitleLines, miniOutlineStartup, miniOutlinePlaybackDisplay, miniOutlineCollapsedStyle, floatingPauseButton, floatingStopButton, floatingSeekButtons, ocrEnabled, readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
+    const { miniOutlineMode, miniOutlineSide, miniOutlineHover, miniOutlineDepth, miniOutlineTransparent, miniOutlineDoubleClick, miniOutlineWidth, miniOutlineTitleLines, miniOutlineStartup, miniOutlinePlaybackDisplay, miniOutlineCollapsedStyle, floatingPauseButton, floatingStopButton, floatingSeekButtons, floatingSpeedButtons, floatingRightClickVolume, ocrEnabled, readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
     return JSON.stringify(speech);
   }
 
@@ -830,12 +831,35 @@ class NoteReaderMobilePlugin extends Plugin {
     if (refs.text.textContent !== text) refs.text.textContent = text;
   }
 
-  async setPlaybackSpeed(value) {
+  async setPlaybackSpeed(value, options = {}) {
     const number = Number(value);
     this.settings.speed = Number.isFinite(number) ? Math.max(0.5, Math.min(2, number)) : 1;
     if (this.activeAudio) this.activeAudio.playbackRate = this.settings.speed;
     this.renderViews();
+    if (options.announce) this.showPlaybackRateNotice(this.settings.speed);
     await this.saveSettings();
+  }
+
+  showPlaybackRateNotice(value) {
+    const speed = Number.isFinite(Number(value)) ? Math.max(0.5, Math.min(2, Number(value))) : 1;
+    this.showPlaybackControlNotice(this.settings.settingsLanguage === 'chinese' ? `播放倍速：${speed}x` : `Playback speed: ${speed}x`);
+  }
+
+  showPlaybackVolumeNotice(value) {
+    const number = Number(value), volume = Math.round((Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : 1) * 100);
+    this.showPlaybackControlNotice(this.settings.settingsLanguage === 'chinese' ? `音量：${volume}%` : `Volume: ${volume}%`);
+  }
+
+  showPlaybackControlNotice(message) {
+    if (this.playbackControlNotice) this.playbackControlNotice.setMessage(message);
+    else this.playbackControlNotice = new Notice(message, 0);
+    clearTimeout(this.playbackControlNoticeTimer);
+    this.playbackControlNoticeTimer = setTimeout(() => this.hidePlaybackControlNotice(), 1400);
+  }
+
+  hidePlaybackControlNotice() {
+    clearTimeout(this.playbackControlNoticeTimer); this.playbackControlNoticeTimer = null;
+    this.playbackControlNotice?.hide(); this.playbackControlNotice = null;
   }
 
   applyVolume(value) {
@@ -2113,6 +2137,22 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
       .addDropdown((dropdown) => dropdown.addOption('concise', 'sub / bar').addOption('verbose', label('Expanded wording', '完整术语'))
         .setValue(options.academicMathStyle).onChange(async (value) => {
           this.plugin.settings.academicMathStyle = value;
+          await this.plugin.saveSettings();
+        }));
+    new Setting(containerEl).setName(label('Interval speech (concise style)', '区间读法（简洁模式）'))
+      .setDesc(label('Recognized intervals only. Keep endpoint inclusion by default, or read only lower to upper. Explicit style remains unchanged.', '仅适用于可靠识别的区间。默认保留端点条件，可选择只读起点到终点；完整模式不变。'))
+      .addDropdown(dropdown => dropdown.addOption('precise', label('Preserve endpoints (default)', '保留端点条件（默认）'))
+        .addOption('range', label('Only read lower to upper', '只读起点到终点'))
+        .setValue(options.academicIntervalStyle).onChange(async value => {
+          this.plugin.settings.academicIntervalStyle = academicOptions({ academicIntervalStyle: value }).academicIntervalStyle;
+          await this.plugin.saveSettings();
+        }));
+    new Setting(containerEl).setName(label('Simple function speech', '简单函数读法'))
+      .setDesc(label('Concise simple functions only. Keep f of x by default, or omit of and say f x. Prose, explicit style and complex-math rules stay unchanged.', '仅用于简洁模式中可靠识别的简单函数。默认读 f of x，可省略 of 读 f x；正文、完整模式和复杂公式规则不变。'))
+      .addDropdown(dropdown => dropdown.addOption('of', label('Keep of: f of x (default)', '保留 of：f of x（默认）'))
+        .addOption('compact', label('Omit of: f x', '省略 of：f x'))
+        .setValue(options.academicFunctionStyle).onChange(async value => {
+          this.plugin.settings.academicFunctionStyle = academicOptions({ academicFunctionStyle: value }).academicFunctionStyle;
           await this.plugin.saveSettings();
         }));
     new Setting(containerEl).setName(label('Announce omitted content', '提示略过内容'))

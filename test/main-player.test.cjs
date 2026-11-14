@@ -66,9 +66,14 @@ let pdfLoader = async () => ({});
 const originalLoad = Module._load;
 let loaded;
 let actualServices;
+const controlNotices = [];
 try {
   Module._load = function(request, parent, isMain) {
-    if (request === 'obsidian') return { Plugin: class {}, ItemView: class {}, MarkdownView: class {}, Notice: class {},
+    if (request === 'obsidian') return { Plugin: class {}, ItemView: class {}, MarkdownView: class {}, Notice: class {
+      constructor(message) { this.message = message; controlNotices.push(this); }
+      setMessage(message) { this.message = message; }
+      hide() { this.hidden = true; }
+    },
       Modal: class { constructor(app) { this.app = app; this.contentEl = new Element(); this.modalEl = new Element(); } open() { this.onOpen(); } close() { this.onClose(); } },
       loadPdfJs: (...args) => pdfLoader(...args),
       PluginSettingTab: class { constructor(app) { this.app = app; this.containerEl = new Element(); } },
@@ -115,6 +120,8 @@ test('reading menu and floating icon preferences do not interrupt playback', asy
   plugin.settings.miniOutlineCollapsedStyle='rail';
   plugin.settings.floatingPauseButton=true;
   plugin.settings.floatingStopButton=false;
+  plugin.settings.floatingSpeedButtons=true;
+  plugin.settings.floatingRightClickVolume=true;
   await plugin.saveSettings();
   assert.equal(stops,0);
   assert.equal(plugin.saved.at(-1).readingFloatingAction,'from-selection');
@@ -736,6 +743,35 @@ test('mobile preview uses only a fixed chunk, suppresses term substitutions and 
   const old = plugin.previewOwner; plugin.previewOwner = {};
   plugin.stopReading = () => { throw Error('Must not stop a newer session'); };
   plugin.stopSettingsPreview(old);
+});
+
+test('mobile formula choices persist in both setting languages without changing voices', async () => {
+  for (const settingsLanguage of ['english', 'chinese']) {
+    const plugin = fixture({ settingsLanguage, speechEngine: 'mimo', mimoVoice: '冰糖' });
+    plugin.saveSettings = async () => { plugin.settings = normalizeSettings(plugin.settings); };
+    const tab = new loaded.__test.NoteReaderMobileSettingTab(plugin.app, plugin); tab.activeTab = 'academic'; tab.display();
+    const rows = tab.containerEl.all().flatMap(element => element.rows || []);
+    const functionRow = rows.find(row => row.name === (settingsLanguage === 'chinese' ? '简单函数读法' : 'Simple function speech'));
+    const intervalRow = rows.find(row => row.name === (settingsLanguage === 'chinese' ? '区间读法（简洁模式）' : 'Interval speech (concise style)'));
+    assert.ok(functionRow); assert.ok(intervalRow); assert.equal(functionRow.input.value, 'of'); assert.equal(intervalRow.input.value, 'precise');
+    await functionRow.input.change('compact'); await intervalRow.input.change('range');
+    assert.equal(plugin.settings.academicFunctionStyle, 'compact'); assert.equal(plugin.settings.academicIntervalStyle, 'range');
+    assert.equal(plugin.settings.mimoVoice, '冰糖'); assert.equal(plugin.settings.speechEngine, 'mimo');
+  }
+});
+
+test('floating rate and volume feedback uses one short notice without changing the session', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const plugin = fixture({ speechEngine: 'mimo' }); plugin.activeAudio = { playbackRate: 1, volume: 1 };
+  const count = controlNotices.length, session = plugin.sessionId;
+  await plugin.setPlaybackSpeed(1.25, { announce: true });
+  assert.equal(plugin.activeAudio.playbackRate, 1.25); assert.equal(controlNotices.length, count + 1);
+  const notice = controlNotices.at(-1); assert.equal(notice.message, 'Playback speed: 1.25x');
+  plugin.applyVolume(0); plugin.showPlaybackVolumeNotice(0);
+  assert.equal(plugin.activeAudio.volume, 0); assert.equal(notice.message, 'Volume: 0%'); assert.equal(controlNotices.length, count + 1);
+  t.mock.timers.tick(1399); assert.notEqual(notice.hidden, true);
+  plugin.showPlaybackRateNotice(1.5); t.mock.timers.tick(1399); assert.notEqual(notice.hidden, true);
+  t.mock.timers.tick(1); assert.equal(notice.hidden, true); assert.equal(plugin.sessionId, session);
 });
 
 test('academic reading uses core opt-in settings only when Markdown stripping is enabled', () => {

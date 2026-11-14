@@ -25,11 +25,18 @@ function mobileMiniAdapter(plugin) {
     playback: () => {
       const active = !!plugin.queue?.items.length && !['complete', 'error'].includes(plugin.queue.status) && !plugin.exportModal?.busy;
       return { active, session: plugin.sessionId, paused: !!plugin.pauseRequested,
-        canToggle: active && plugin.phaseOverride !== 'extracting', canStop: active, canSeek: active && !!plugin.canSeekAudio?.(), title: plugin.sourceLabel };
+        canToggle: active && plugin.phaseOverride !== 'extracting', canStop: active, canSeek: active && !!plugin.canSeekAudio?.(),
+        canRate: active && plugin.settings.speechEngine !== 'system', canVolume: active && plugin.settings.speechEngine !== 'system',
+        minRate: 0.5, maxRate: 2, title: plugin.sourceLabel };
     },
     togglePlayback: () => plugin.togglePause(),
     stopPlayback: () => plugin.stopReading({ quiet: true }),
     seekPlaybackBy: seconds => plugin.seekAudioBy(seconds),
+    setPlaybackRate: speed => plugin.setPlaybackSpeed(speed, { announce: true }),
+    setPlaybackVolume: async value => {
+      plugin.applyVolume(value); plugin.showPlaybackVolumeNotice(plugin.settings.volume);
+      await plugin.saveSettings();
+    },
     playbackError: error => plugin.fail(error),
     loadCollapsed: (view, cancelled) => adapter.load(view, cancelled, false, true),
     async load(view, cancelled, force, cachedOnly = false) {

@@ -36,6 +36,7 @@ This earlier demo shows the full outline dialog, still available from the **Open
 
 ## Highlights
 
+- **0.8.4 formula and control update:** shared Core 0.3.0 adds optional connector-free simple functions and range-only interval speech in concise style. Optional floating 0.25x speed steps report the current rate; secondary-mouse volume steps are separately opt-in. Existing voices and defaults are preserved. [Release notes](docs/release-0.8.4.md).
 - **Mini outline playback:** choose a heading, use the top **Outline options** to read that section or continue from it, then pause/resume in the same panel. Tapping a title alone only navigates. Search and pin the outline without opening the main playback bar; no double-tap gesture is required.
 - **Optional OCR (experimental):** off by default, with a separately installed resource pack and single-page recognition. Read printed text in scanned PDFs and PNG/JPEG/WebP after editing the preview. No image upload, no model load at startup. Physical iPhone/iPad/Android validation is pending. [Setup and device checklist](docs/local-ocr.md).
 
