@@ -1,6 +1,6 @@
 {
   "name": "note-reader-mobile",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "private": true,
   "description": "Mobile-first note, PDF and local HTML voice reader with academic reading tools and WAV export.",
   "license": "MIT",
@@ -11,7 +11,7 @@
     "benchmark:playback": "node scripts/benchmark-playback.cjs"
   },
   "dependencies": {
-    "@laginae/note-reader-core": "github:laginae/note-reader-core#f0e6195fdda69e49c1bb54c21c0187eb005b6322",
+    "@laginae/note-reader-core": "github:laginae/note-reader-core#18ffde5ef9b723a1244970e35d39e4ea70602c48",
     "htmlparser2": "10.0.0"
   },
   "devDependencies": {

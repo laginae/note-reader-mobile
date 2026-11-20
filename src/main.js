@@ -2085,13 +2085,16 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
       }));
     }
     if (this.activeTab === 'academic') {
+    const refreshPreview = require('./academic-preview').addAcademicPreview(containerEl, this.plugin.settings.settingsLanguage,
+      sample => this.plugin.prepareText(sample));
+    const saveAcademic = () => { refreshPreview(); return this.plugin.saveSettings(); };
     addSpeechTermsSettings(containerEl, this.plugin);
     new Setting(containerEl)
       .setName(ui.stripMarkdown)
       .setDesc(ui.stripMarkdownDesc)
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.stripMarkdown).onChange(async (value) => {
         this.plugin.settings.stripMarkdown = value;
-        await this.plugin.saveSettings();
+        await saveAcademic();
       }));
     new Setting(containerEl)
       .setName(ui.mathLanguage)
@@ -2102,7 +2105,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.mathReadingLanguage)
         .onChange(async (value) => {
           this.plugin.settings.mathReadingLanguage = value;
-          await this.plugin.saveSettings();
+          await saveAcademic();
         }));
     const options = academicOptions(this.plugin.settings);
     addOcrSettings(containerEl, this.plugin, Setting);
@@ -2112,7 +2115,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
       .setDesc(label('Locally filters repeated short edge lines and page numbers. Uncertain text and selection-only reading are preserved. Applies to the next reading session; disable if body text is omitted.', '在本地过滤页边重复短行和页码；不确定的文字和仅选中文字保留。下次朗读生效；发现正文误删时可关闭。'))
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.pdfSkipHeaders).onChange(async (value) => {
         this.plugin.settings.pdfSkipHeaders = value;
-        await this.plugin.saveSettings();
+        await saveAcademic();
       }));
     new Setting(containerEl).setName(label('PDF footnote reading', 'PDF 脚注朗读'))
       .setDesc(label('Body only by default. Uses bottom-page markers, smaller type and spacing to identify notes and first-page correspondence blocks. Uncertain text and selection-only reading are preserved. Applies next session.', '默认只读正文。结合页底标号、小字号及间距识别脚注和首页作者信息；不确定的文字及仅选中文字保留。下次朗读生效。'))
@@ -2121,7 +2124,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
         .addOption('footnotes', label('Footnotes only', '只读脚注'))
         .setValue(this.plugin.settings.pdfFootnoteMode).onChange(async (value) => {
           this.plugin.settings.pdfFootnoteMode = normalizeFootnoteMode(value);
-          await this.plugin.saveSettings();
+          await saveAcademic();
         }));
     for (const [key, name] of [['academicMathMode', label('Formula reading', '公式朗读')], ['academicTableMode', label('Table reading', '表格朗读')]]) {
       new Setting(containerEl).setName(name)
@@ -2130,20 +2133,20 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
           .addOption('all', label('All supported content', '全部支持的内容')).addOption('skip', label('Skip', '略过'))
           .setValue(options[key]).onChange(async (value) => {
             this.plugin.settings[key] = value;
-            await this.plugin.saveSettings();
+            await saveAcademic();
           }));
     }
     new Setting(containerEl).setName(label('Repeat table headers for each row', '每行重复表头'))
       .setDesc(label('On by default. Disable to read column headings once, then row numbers and values. Empty cells retain a placeholder; smart skipping is unchanged. PDF headings are not guessed. Applies next session.', '默认开启。关闭后只在开头读一次表头，后续读行号和数据；空单元格保留占位，智能跳过策略不变。PDF 不强行推断表头，下次朗读生效。'))
       .addToggle(toggle => toggle.setValue(options.academicTableRepeatHeaders).onChange(async value => {
         this.plugin.settings.academicTableRepeatHeaders = value;
-        await this.plugin.saveSettings();
+        await saveAcademic();
       }));
     new Setting(containerEl).setName(label('Formula wording', '公式用词'))
       .addDropdown((dropdown) => dropdown.addOption('concise', 'sub / bar').addOption('verbose', label('Expanded wording', '完整术语'))
         .setValue(options.academicMathStyle).onChange(async (value) => {
           this.plugin.settings.academicMathStyle = value;
-          await this.plugin.saveSettings();
+          await saveAcademic();
         }));
     new Setting(containerEl).setName(label('Interval speech (concise style)', '区间读法（简洁模式）'))
       .setDesc(label('Recognized intervals only. Keep endpoint inclusion by default, or read only lower to upper. Explicit style remains unchanged.', '仅适用于可靠识别的区间。默认保留端点条件，可选择只读起点到终点；完整模式不变。'))
@@ -2151,7 +2154,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
         .addOption('range', label('Only read lower to upper', '只读起点到终点'))
         .setValue(options.academicIntervalStyle).onChange(async value => {
           this.plugin.settings.academicIntervalStyle = academicOptions({ academicIntervalStyle: value }).academicIntervalStyle;
-          await this.plugin.saveSettings();
+          await saveAcademic();
         }));
     new Setting(containerEl).setName(label('Simple function speech', '简单函数读法'))
       .setDesc(label('Concise simple functions only. Keep f of x by default, or omit of and say f x. Prose, explicit style and complex-math rules stay unchanged.', '仅用于简洁模式中可靠识别的简单函数。默认读 f of x，可省略 of 读 f x；正文、完整模式和复杂公式规则不变。'))
@@ -2159,12 +2162,12 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
         .addOption('compact', label('Omit of: f x', '省略 of：f x'))
         .setValue(options.academicFunctionStyle).onChange(async value => {
           this.plugin.settings.academicFunctionStyle = academicOptions({ academicFunctionStyle: value }).academicFunctionStyle;
-          await this.plugin.saveSettings();
+          await saveAcademic();
         }));
     new Setting(containerEl).setName(label('Announce omitted content', '提示略过内容'))
       .addToggle((toggle) => toggle.setValue(options.academicSkipNotice).onChange(async (value) => {
         this.plugin.settings.academicSkipNotice = value;
-        await this.plugin.saveSettings();
+        await saveAcademic();
       }));
     }
     if (this.activeTab === 'playback') {
