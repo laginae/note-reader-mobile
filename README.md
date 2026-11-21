@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-A mobile-first read-aloud companion for Markdown notes, text-based PDFs and local HTML files in Obsidian.
+Read Markdown notes, text-based PDFs and local HTML in Obsidian on your phone or tablet. New installs start directly in Everyday reading; choose **Reading content → Academic detail** for explicit formulas and row labels.
 
 **Read from a compact mini outline.** Navigate chapters, start a section from **Outline options**, and pause/resume in the outline header without opening the main playback bar. Touch controls stay visible. [See the desktop walkthrough of this workflow](https://github.com/laginae/note-reader-cosyvoice#read-from-the-mini-outline); it is not a phone recording, and current-release physical-device validation remains pending.
 
@@ -36,7 +36,7 @@ This earlier demo shows the full outline dialog, still available from the **Open
 
 ## Highlights
 
-- **0.8.5 table wording:** The academic reading preview formats fixed examples locally without using notes or a speech service. **Repeat table headers for each row** is on by default. Turn it off to read headings once and then row values; smart omission remains independent. [Release notes](docs/release-0.8.5.md).
+- **Reading content:** Everyday is the default for new installs, with brief formulas and headers once for simple tables. Choose Academic detail or retain your previous Custom preferences. The [optional OCR pack and guide](docs/local-ocr.md) are independent of reading style. [Release notes](docs/release-0.9.0.md).
 - **0.8.4 formula and control update:** shared Core 0.3.0 adds optional connector-free simple functions and range-only interval speech in concise style. Optional floating 0.25x speed steps report the current rate; secondary-mouse volume steps are separately opt-in. Existing voices and defaults are preserved. [Release notes](docs/release-0.8.4.md).
 - **Mini outline playback:** choose a heading, use the top **Outline options** to read that section or continue from it, then pause/resume in the same panel. Tapping a title alone only navigates. Search and pin the outline without opening the main playback bar; no double-tap gesture is required.
 - **Optional OCR (experimental):** off by default, with a separately installed resource pack and single-page recognition. Read printed text in scanned PDFs and PNG/JPEG/WebP after editing the preview. No image upload, no model load at startup. Physical iPhone/iPad/Android validation is pending. [Setup and device checklist](docs/local-ocr.md).
@@ -174,7 +174,7 @@ On Markdown, local HTML or PDF files, tap the outline icon or choose Document ou
 
 Reopening the same unchanged PDF uses a single-document memory cache. Refresh explicitly rescans it; file changes or header-filter changes invalidate it. The cache is not written to settings and is cleared on plugin unload. Nothing is written back to the PDF.
 
-Academic > PDF footnote reading defaults to Body only. Smaller bottom-page text with a marker and a separating gap may be identified as a note; uncertain text stays in the body. Choose Original order to retain notes, or Footnotes only to read them separately. The toolbar scope menu also offers Read PDF footnotes only without changing the setting. Selection-only reading preserves the selected text. Notes are separated by page layout, not linked semantically to individual citations.
+Reading content > PDF footnote reading defaults to Body only. Smaller bottom-page text with a marker and a separating gap may be identified as a note; uncertain text stays in the body. Choose Original order to retain notes, or Footnotes only to read them separately. The toolbar scope menu also offers Read PDF footnotes only without changing the setting. Selection-only reading preserves the selected text. Notes are separated by page layout, not linked semantically to individual citations.
 
 ## Local HTML
 
@@ -221,7 +221,7 @@ Conventional bounds such as `[\ell,u]` and matching `E_{\min}` / `E_{\max}` endp
 
 Concise style recognizes short intervals when nearby prose explicitly identifies them or the formula uses membership such as `x\in[a,b]`. Open/closed endpoints stay distinct; unary signs use "minus"/"plus". In concise style, otherwise ambiguous short `(a,b)` or `[a,b]` pairs use neutral pauses ("a, b"), not an assumed interval; verbose style keeps brackets. Existing standalone numeric closed intervals and conventional bounds remain supported, but explicit coordinate/vector context prevents range wording. Simple two-argument calls state their arguments. Whole expressions such as `(a+b)c` use "the sum of a and b, times c"; isolated or unsupported arithmetic groups keep structural cues rather than silently losing precedence. Short literal sets use set/member labels (up to three simple members); PDF literal braces require math-font evidence. Complex smart-mode omissions and explicit skip settings remain in force. Original text and highlight coordinates are unchanged; start a new reading session for the new pronunciation.
 
-**PDF headers and footers:** Settings > Academic > Skip PDF headers and footers is on by default. It locally removes short repeated edge lines (such as authors and journal names) and recognizable page numbers, without modifying the PDF. It applies to full-PDF reading, continuing from a selection and resuming; selection-only reading keeps the selected text. Changes take effect on the next reading session.
+**PDF headers and footers:** Settings > Reading content > Skip PDF headers and footers is on by default. It locally removes short repeated edge lines (such as authors and journal names) and recognizable page numbers, without modifying the PDF. It applies to full-PDF reading, continuing from a selection and resuming; selection-only reading keeps the selected text. Changes take effect on the next reading session.
 
 Filtering is conservative: uncertain edge text, larger titles and numbered headings are retained. When starting partway through a PDF, up to three preceding pages provide local recognition evidence but are not read aloud. Unique headers, unusual margins, rotated pages or missing text coordinates may remain unfiltered; disable the setting if body text is omitted.
 

@@ -4,8 +4,14 @@ const {extractPdfTextLayout}=require('@laginae/note-reader-core');
 const isImage=file=>/^(png|jpe?g|webp)$/i.test(file?.extension||'');
 const supported=file=>isImage(file)||file?.extension?.toLowerCase()==='pdf';
 const t=(plugin,zh,en)=>plugin.settings.settingsLanguage==='chinese'?zh:en;
+function ocrInstallLinks(version) {
+  const repo='https://github.com/laginae/note-reader-mobile';
+  const tag=/^\d+\.\d+\.\d+$/.test(version || '') ? version : '';
+  return { download:tag ? repo+'/releases/download/'+tag+'/cozy-mobile-ocr-resources.zip' : repo+'/releases',
+    guide:repo+'/blob/'+(tag || 'main')+'/docs/local-ocr.md' };
+}
 function openOcr(plugin,file=plugin.getActiveFile()) {
-  if(!plugin.settings.ocrEnabled){new Notice(t(plugin,'请先在学术阅读设置中开启“本机 OCR（实验性）”并安装配套资源包。','Enable Local OCR (experimental) in Academic reading and install its matching resource pack first.'));return;}
+  if(!plugin.settings.ocrEnabled){new Notice(t(plugin,'请在“阅读内容 → 本机 OCR（实验性）”中查看资源包和安装说明，再启用 OCR。','See the resource pack and installation guide under Reading content > Local OCR (experimental) before enabling OCR.'));return;}
   if(!supported(file)){new Notice(t(plugin,'请打开 PDF、PNG、JPEG 或 WebP 图片。','Open a PDF, PNG, JPEG or WebP image.'));return;}
   plugin.ocrModal?.close();
   const {mountOcrForm}=require('./portable-ocr-form.cjs');
@@ -31,5 +37,10 @@ function addOcrSettings(container,plugin,Setting){
   new Setting(container).setName(t(plugin,'本机 OCR（实验性）','Local OCR (experimental)'))
     .setDesc(t(plugin,'默认关闭，需独立安装配套 ocr-assets 资源包；只识别指定单页，按需加载，切到后台即取消。未完成 iPhone/iPad/Android 真机验证。图片不上传；在线音色会发送识别文字。','Off by default. Install the matching ocr-assets pack separately. One page at a time, loaded on demand; backgrounding cancels OCR. Not validated on physical iPhone/iPad/Android devices. Images stay local; online voices transmit recognized text.'))
     .addToggle(toggle=>toggle.setValue(plugin.settings.ocrEnabled).onChange(async value=>{plugin.settings.ocrEnabled=value;if(!value)plugin.ocrModal?.close();await plugin.saveSettings();}));
+  const links=ocrInstallLinks(plugin.manifest?.version), row=container.createEl('p');
+  const link=(label,url)=>{const a=row.createEl('a',{text:label});a.href=url;a.target='_blank';a.rel='noopener noreferrer';};
+  link(t(plugin,'下载移动端 OCR 资源包','Download mobile OCR resource pack'),links.download);
+  row.createEl('span',{text:' · '});
+  link(t(plugin,'安装说明（iOS / Android）','Installation guide (iOS / Android)'),links.guide);
 }
-module.exports={registerOcr,addOcrSettings,openOcr,isImage};
+module.exports={registerOcr,addOcrSettings,openOcr,isImage,ocrInstallLinks};

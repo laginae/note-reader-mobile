@@ -9,6 +9,7 @@ const { applyTerms, fitSpeechParts, adjacentContext } = require('./speech-option
 const { addSpeechContextSetting, addSpeechTermsSettings } = require('./speech-options-settings');
 const { registerReadingMenu, syncEditingToolbar, addReadingMenuSettings } = require('./reading-menu');
 const { registerOcr, addOcrSettings, openOcr, isImage } = require('./ocr-entry');
+const { loadInitialPreferences, savePreferences } = require('./preferences-storage');
 const { installMiniOutline } = require('./mini-outline-adapter');
 const { addMiniOutlineSettings } = require('./mini-outline');
 
@@ -142,7 +143,7 @@ const UI = {
     systemControls: 'System voice speed and volume changes take effect from the next chunk; device volume also applies.',
     engineTab: 'Engine',
     playbackTab: 'Playback',
-    academicTab: 'Academic',
+    academicTab: 'Reading content',
     rapidStart: 'Rapid start',
     rapidStartDesc: 'Use a complete first sentence of 5–19 characters when possible; otherwise use the normal 20/40-character opening stages.',
     privacyTab: 'Privacy',
@@ -238,7 +239,7 @@ const UI = {
     systemControls: '系统语音的倍速和音量调整从下一分段生效，也受设备音量控制。',
     engineTab: '语音引擎',
     playbackTab: '播放设置',
-    academicTab: '学术阅读',
+    academicTab: '阅读内容',
     rapidStart: '极速起读',
     rapidStartDesc: '首个完整句子为 5–19 字时优先起读，否则使用常规 20/40 字起读门槛。',
     privacyTab: '隐私与帮助',
@@ -357,7 +358,8 @@ class NoteReaderMobileView extends ItemView {
 
 class NoteReaderMobilePlugin extends Plugin {
   async onload() {
-    this.settings = normalizeSettings(await this.loadData());
+    this.onPreferenceConflict = message => new Notice(message, 9000);
+    this.settings = normalizeSettings(await loadInitialPreferences(this));
     registerOcr(this);
     startDeviceCacheMaintenance(this);
     registerReadingMenu(this, snapshot => this.runSafely(() => this.startTextSession(snapshot.text, {
@@ -470,13 +472,15 @@ class NoteReaderMobilePlugin extends Plugin {
     if (this.lastSpeechConfiguration && configuration !== this.lastSpeechConfiguration) this.stopReading({ quiet: true });
     this.lastSpeechConfiguration = configuration;
     this.settings.readingPositions = normalizeReadingPositions(this.settings.readingPositions);
-    await this.saveData(this.settings);
+    await savePreferences(this, this.settings);
     this.miniOutline?.sync();
     await syncEditingToolbar(this);
   }
 
   speechConfigurationKey() {
-    const { miniOutlineMode, miniOutlineSide, miniOutlineHover, miniOutlineDepth, miniOutlineTransparent, miniOutlineDoubleClick, miniOutlineWidth, miniOutlineTitleLines, miniOutlineStartup, miniOutlinePlaybackDisplay, miniOutlineCollapsedStyle, floatingPauseButton, floatingStopButton, floatingSeekButtons, floatingSpeedButtons, floatingRightClickVolume, ocrEnabled, readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = this.settings;
+    // Reading preferences shape the next prepared text, not the current voice session.
+    const { readingProfile, academicMathMode, academicMathStyle, academicIntervalStyle, academicFunctionStyle, academicTableMode, academicTableRepeatHeaders, academicSkipNotice, ...other } = this.settings;
+    const { miniOutlineMode, miniOutlineSide, miniOutlineHover, miniOutlineDepth, miniOutlineTransparent, miniOutlineDoubleClick, miniOutlineWidth, miniOutlineTitleLines, miniOutlineStartup, miniOutlinePlaybackDisplay, miniOutlineCollapsedStyle, floatingPauseButton, floatingStopButton, floatingSeekButtons, floatingSpeedButtons, floatingRightClickVolume, ocrEnabled, readingHighlight, persistentAudioCache, backgroundAudio, readingContextMenu, readingFloatingToolbar, readingFloatingAction, speed, volume, settingsLanguage, readingPositions, rememberReadingPosition, chunkLimits, stripMarkdown, mathReadingLanguage, pdfSkipHeaders, pdfFootnoteMode, speechTerms, speechTermsEnabled, ...speech } = other;
     return JSON.stringify(speech);
   }
 
@@ -2087,6 +2091,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
       }));
     }
     if (this.activeTab === 'academic') {
+    const customProfile = require('./reading-profile-setting').addReadingProfileSetting(containerEl, this.plugin, Setting, () => this.display());
     const refreshPreview = require('./academic-preview').addAcademicPreview(containerEl, this.plugin.settings.settingsLanguage,
       sample => this.plugin.prepareText(sample));
     const saveAcademic = () => { refreshPreview(); return this.plugin.saveSettings(); };
@@ -2128,6 +2133,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
           this.plugin.settings.pdfFootnoteMode = normalizeFootnoteMode(value);
           await saveAcademic();
         }));
+    if (customProfile) {
     for (const [key, name] of [['academicMathMode', label('Formula reading', '公式朗读')], ['academicTableMode', label('Table reading', '表格朗读')]]) {
       new Setting(containerEl).setName(name)
         .setDesc(label('Applies when Strip Markdown is enabled. Smart mode skips complex formulas or long numeric tables. All mode still omits formulas that cannot be parsed safely.', '开启“移除 Markdown 格式”后生效。智能模式跳过复杂公式或较长数字表格；完整模式仍会略过无法可靠解析的公式。'))
@@ -2139,7 +2145,7 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
           }));
     }
     new Setting(containerEl).setName(label('Repeat table headers for each row', '每行重复表头'))
-      .setDesc(label('On by default. Disable to read column headings once, then row numbers and values. Empty cells retain a placeholder; smart skipping is unchanged. PDF headings are not guessed. Applies next session.', '默认开启。关闭后只在开头读一次表头，后续读行号和数据；空单元格保留占位，智能跳过策略不变。PDF 不强行推断表头，下次朗读生效。'))
+      .setDesc(label('Turn off to hear headers once, then row numbers and values. Empty cells keep their position; PDF headers are not guessed.', '关闭后只在开头读一次表头，再读行号与数据。保留空单元格位置，不猜测 PDF 的列名。'))
       .addToggle(toggle => toggle.setValue(options.academicTableRepeatHeaders).onChange(async value => {
         this.plugin.settings.academicTableRepeatHeaders = value;
         await saveAcademic();
@@ -2151,21 +2157,24 @@ class NoteReaderMobileSettingTab extends PluginSettingTab {
           await saveAcademic();
         }));
     new Setting(containerEl).setName(label('Interval speech (concise style)', '区间读法（简洁模式）'))
-      .setDesc(label('Recognized intervals only. Keep endpoint inclusion by default, or read only lower to upper. Explicit style remains unchanged.', '仅适用于可靠识别的区间。默认保留端点条件，可选择只读起点到终点；完整模式不变。'))
-      .addDropdown(dropdown => dropdown.addOption('precise', label('Preserve endpoints (default)', '保留端点条件（默认）'))
+      .setDesc(label('Natural comparisons preserve endpoint inclusion. Bounds only omits inclusion.', '自然读法用比较词保留端点条件；只读起止值会省略端点是否包含的信息。'))
+      .addDropdown(dropdown => dropdown.addOption('natural', label('Natural comparisons', '自然读法（保留端点条件）'))
+        .addOption('precise', label('Explicit endpoints', '明确端点条件'))
         .addOption('range', label('Only read lower to upper', '只读起点到终点'))
         .setValue(options.academicIntervalStyle).onChange(async value => {
           this.plugin.settings.academicIntervalStyle = academicOptions({ academicIntervalStyle: value }).academicIntervalStyle;
           await saveAcademic();
         }));
     new Setting(containerEl).setName(label('Simple function speech', '简单函数读法'))
-      .setDesc(label('Concise simple functions only. Keep f of x by default, or omit of and say f x. Prose, explicit style and complex-math rules stay unchanged.', '仅用于简洁模式中可靠识别的简单函数。默认读 f of x，可省略 of 读 f x；正文、完整模式和复杂公式规则不变。'))
-      .addDropdown(dropdown => dropdown.addOption('of', label('Keep of: f of x (default)', '保留 of：f of x（默认）'))
+      .setDesc(label('Follow formula language: Chinese uses f x, English uses f of x. Prose and explicit wording are unchanged.', '随公式朗读语言：中文读 f x，英文读 f of x。不改变正文或完整读法。'))
+      .addDropdown(dropdown => dropdown.addOption('auto', label('Follow formula language', '随公式朗读语言'))
+        .addOption('of', label('Keep of: f of x', '保留 of：f of x'))
         .addOption('compact', label('Omit of: f x', '省略 of：f x'))
         .setValue(options.academicFunctionStyle).onChange(async value => {
           this.plugin.settings.academicFunctionStyle = academicOptions({ academicFunctionStyle: value }).academicFunctionStyle;
           await saveAcademic();
         }));
+    }
     new Setting(containerEl).setName(label('Announce omitted content', '提示略过内容'))
       .addToggle((toggle) => toggle.setValue(options.academicSkipNotice).onChange(async (value) => {
         this.plugin.settings.academicSkipNotice = value;

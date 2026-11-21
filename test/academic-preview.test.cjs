@@ -11,7 +11,7 @@ test('preview is lazy, uses fixed examples and the mobile speech formatter, and 
   dom.window.HTMLElement.prototype.createEl = function(tag,{cls='',text=''}={}) {
     const el=doc.createElement(tag); el.className=cls; el.textContent=text; this.append(el); return el;
   };
-  let calls=0; const settings={mathReadingLanguage:'english'};
+  let calls=0; const settings={mathReadingLanguage:'english',readingProfile:'custom'};
   const refresh=addAcademicPreview(doc.querySelector('main'),'english',sample=>{
     calls++;return sanitizeAcademicTextForSpeech(sample,settings);
   });

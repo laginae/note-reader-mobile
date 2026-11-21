@@ -802,6 +802,23 @@ test('floating rate and volume feedback uses one short notice without changing t
   t.mock.timers.tick(1); assert.equal(notice.hidden, true); assert.equal(plugin.sessionId, session);
 });
 
+test('mobile reading styles round trip legacy choices; OCR links target the installed mobile release', async () => {
+  const plugin=fixture({settingsLanguage:'chinese',academicIntervalStyle:'range',academicTableRepeatHeaders:false,readingHighlight:false});
+  plugin.manifest={id:'note-reader-mobile',version:'0.9.0'};
+  plugin.stopReading=()=>assert.fail('Changing the reading style should not interrupt playback');
+  const tab=new loaded.__test.NoteReaderMobileSettingTab(plugin.app,plugin); tab.activeTab='academic'; tab.display();
+  const rows=()=>tab.containerEl.all().flatMap(el=>el.rows||[]);
+  const style=()=>rows().findLast(row=>row.name==='朗读方式').input;
+  assert.equal(style().value,'custom');
+  for(const profile of ['study','everyday','custom']) {
+    await style().change(profile);assert.equal(plugin.settings.readingProfile,profile);
+    assert.equal(plugin.settings.readingHighlight,false);assert.equal(plugin.settings.academicIntervalStyle,'range');assert.equal(plugin.settings.academicTableRepeatHeaders,false);
+  }
+  const urls=tab.containerEl.all().filter(el=>el.href).map(el=>el.href);
+  assert.ok(urls.includes('https://github.com/laginae/note-reader-mobile/releases/download/0.9.0/cozy-mobile-ocr-resources.zip'));
+  assert.ok(urls.includes('https://github.com/laginae/note-reader-mobile/blob/0.9.0/docs/local-ocr.md'));assert.equal(plugin.settings.ocrEnabled,false);
+});
+
 test('mobile table header switch persists independently in both languages', async () => {
   for (const settingsLanguage of ['english', 'chinese']) {
     const plugin = fixture({ settingsLanguage, academicTableMode: 'smart' });
@@ -815,7 +832,7 @@ test('mobile table header switch persists independently in both languages', asyn
 });
 
 test('academic reading uses core opt-in settings only when Markdown stripping is enabled', () => {
-  const plugin = fixture();
+  const plugin = fixture({readingProfile:'custom'});
   assert.match(plugin.prepareText('研究[2][4]。 $x_i$'), /文献2和4/);
   assert.equal(plugin.prepareText('$x_i$'), 'x i');
   plugin.settings.academicMathStyle = 'verbose';
@@ -939,7 +956,7 @@ test('PDF footnote modes affect playback chunks but not plain selection reading'
 });
 
 test('PDF outline is cached in memory, invalidates on source/filter changes, and supports explicit refresh', async () => {
-  const plugin = fixture(), source = sourceFixture(plugin, 'pdf');
+  const plugin = fixture({readingProfile:'custom'}), source = sourceFixture(plugin, 'pdf');
   let reads = 0, destroyed = 0;
   plugin.app.vault.readBinary = async () => { reads++; return new ArrayBuffer(4); };
   pdfLoader = async () => ({ getDocument: () => ({ promise: Promise.resolve({ numPages: 1,

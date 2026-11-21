@@ -1,5 +1,6 @@
 'use strict';
 const { MINI_DEFAULTS, normalizeMiniSettings } = require('./mini-outline');
+const { storedReadingPreferences } = require('@laginae/note-reader-core/reading-profiles');
 
 const { normalizeByokProfile } = require('./byok');
 const { ELEVENLABS_MODELS, ELEVENLABS_VOICES } = require('./openrouter-elevenlabs');
@@ -122,12 +123,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   onlinePrefetch: false,
   persistentAudioCache: false,
   backgroundAudio: false,
-  academicMathMode: 'smart',
-  academicMathStyle: 'concise',
-  academicIntervalStyle: 'precise',
-  academicFunctionStyle: 'of',
-  academicTableMode: 'smart',
-  academicTableRepeatHeaders: true,
+  ...storedReadingPreferences(null),
   academicSkipNotice: true,
   pdfSkipHeaders: true,
   pdfFootnoteMode: 'body',
@@ -229,12 +225,7 @@ function normalizeSettings(value) {
     volume: Number.isFinite(Number(source.volume)) && source.volume != null ? Math.max(0, Math.min(1, Number(source.volume))) : 1,
     rapidStart: source.rapidStart === true,
     onlinePrefetch: source.onlinePrefetch === true,
-    academicMathMode: ['smart', 'all', 'skip'].includes(source.academicMathMode) ? source.academicMathMode : 'smart',
-    academicMathStyle: source.academicMathStyle === 'verbose' ? 'verbose' : 'concise',
-    academicIntervalStyle: source.academicIntervalStyle === 'range' ? 'range' : 'precise',
-    academicFunctionStyle: source.academicFunctionStyle === 'compact' ? 'compact' : 'of',
-    academicTableMode: ['smart', 'all', 'skip'].includes(source.academicTableMode) ? source.academicTableMode : 'smart',
-    academicTableRepeatHeaders: source.academicTableRepeatHeaders !== false,
+    ...storedReadingPreferences(source),
     academicSkipNotice: source.academicSkipNotice !== false,
     pdfSkipHeaders: source.pdfSkipHeaders !== false,
     pdfFootnoteMode: ['inline', 'footnotes'].includes(source.pdfFootnoteMode) ? source.pdfFootnoteMode : 'body',

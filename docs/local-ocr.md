@@ -4,8 +4,8 @@
 
 ## 安装与使用
 
-1. 从 [0.5.0 发布附件](https://github.com/laginae/note-reader-mobile/releases/tag/0.5.0)下载 `cozy-mobile-ocr-resources.zip`，将解压后的 `ocr-assets` 整个目录放到库内 `.obsidian/plugins/note-reader-mobile/ocr-assets/`，不要只复制 manifest。资源包包含约 10 MB 的识别程序和中英文模型，以及许可证，压缩下载约 6.2 MB。普通 Obsidian 插件更新不会自动安装这个额外目录。
-2. 在 **学术阅读 → 本机 OCR（实验性）** 中开启。若提示资源包缺失、损坏或版本不匹配，请安装配套包；插件不会跳过哈希校验，也不会自动联网下载代码或模型。
+1. 在“阅读内容 → 本机 OCR（实验性）”点“下载移动端 OCR 资源包”，或从[发布列表](https://github.com/laginae/note-reader-mobile/releases)选择与插件相同的版本。iOS、iPadOS、Android 使用同一份 `cozy-mobile-ocr-resources.zip`，不是桌面可执行程序。将解压后的整个 `ocr-assets` 放到库内 `.obsidian/plugins/note-reader-mobile/`（自定义配置目录请相应替换）；插件不会自动安装资源。
+2. 在 **阅读内容 → 本机 OCR（实验性）** 中开启。若提示资源包缺失、损坏或版本不匹配，请安装配套包；插件不会跳过哈希校验，也不会自动联网下载代码或模型。
 3. 打开 PDF 或 PNG/JPEG/WebP 图片，在命令面板运行 **Recognize PDF or image text (experimental OCR)**；文件菜单也提供入口。打开图片时，“朗读当前文件”会进入识别窗口。
 4. 选择一个页码，必要时旋转，点击“识别本页”。只处理这一个页面，不会批量扫描整本 PDF。
 5. 校对预览文字，尤其是数字、变量和公式，再点“朗读结果”或“朗读选中文字”。使用当前音色和现有在线处理授权。关闭窗口会清除 OCR 预览；已开始的朗读使用正常播放器停止。
@@ -33,6 +33,6 @@
 
 ## English Summary
 
-Disabled by default; separate local resource pack; one selected page only; experimental. Install the matching `ocr-assets` folder under this plugin's directory, enable Local OCR in Academic reading, then run the OCR command on a PDF or PNG/JPEG/WebP. Review and edit the result before reading. Assets are hash-verified and never downloaded automatically. Images remain local; online voices still transmit selected recognized text. Backgrounding cancels recognition. Recognition can use hundreds of MB while active despite the small download. No physical iPhone/iPad/Android acceptance is claimed. Source-image highlighting, OCR outlines and searchable-PDF creation are not included.
+Disabled by default; separate local resource pack; one selected page only; experimental. Install the matching `ocr-assets` folder under this plugin's directory, use the matching pack link and enable Local OCR in Reading content, then run the OCR command on a PDF or PNG/JPEG/WebP. Review and edit the result before reading. Assets are hash-verified and never downloaded automatically. Images remain local; online voices still transmit selected recognized text. Backgrounding cancels recognition. Recognition can use hundreds of MB while active despite the small download. No physical iPhone/iPad/Android acceptance is claimed. Source-image highlighting, OCR outlines and searchable-PDF creation are not included.
 
 Developers: `npm run build` generates both `main.js` and the independent `dist/ocr-assets/` package from pinned dependencies. Distribute the complete resource directory, licenses and manifest separately. Never embed the resource JSON into `main.js`.
