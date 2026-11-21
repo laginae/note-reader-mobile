@@ -75,14 +75,17 @@ function mobileMiniAdapter(plugin) {
       if (!valid(view, data)) throw Error('Changed');
       await plugin.locateOutlineEntry(data.file, data.key, { ...data, kind: data.kind === 'pdf' ? undefined : data.kind }, index, () => !valid(view, data));
     },
-    async read(view, data, index, remaining) {
+    async read(view, data, index, remaining, { cancelled = () => false, onStarted } = {}) {
+      if (cancelled()) return;
       if (!valid(view, data) || adapter.busy()) throw Error('Changed');
       await workspace.revealLeaf(view.leaf);
-      if (!valid(view, data) || adapter.busy()) throw Error('Changed');
+      if (cancelled() || adapter.busy()) return;
+      if (!valid(view, data)) throw Error('Changed');
+      const start = onStarted ? { onStarted } : {};
       if (data.kind === 'markdown') return plugin.startTextSession(sectionText(data, index, remaining), {
-        file: data.file, kind: 'markdown', sourceLabel: data.entries[index].title, sourceText: data.text, sourceOffset: data.entries[index].offset,
+        ...start, file: data.file, kind: 'markdown', sourceLabel: data.entries[index].title, sourceText: data.text, sourceOffset: data.entries[index].offset,
       });
-      return plugin.readPdfSection(data.file, data.key, { ...data, kind: data.kind === 'pdf' ? undefined : data.kind }, index, remaining);
+      return plugin.readPdfSection(data.file, data.key, { ...data, kind: data.kind === 'pdf' ? undefined : data.kind }, index, remaining, start);
     },
     async returnReading(view, data) {
       if (!valid(view, data)) return;

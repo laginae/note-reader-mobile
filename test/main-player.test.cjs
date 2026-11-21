@@ -745,6 +745,34 @@ test('mobile preview uses only a fixed chunk, suppresses term substitutions and 
   plugin.stopSettingsPreview(old);
 });
 
+test('mobile PDF chapter startup releases controls and a late end from the previous chapter is ignored', async () => {
+  const plugin = fixture({ speechEngine: 'system' }), requests = [], handoffs = [], saved = [];
+  const file = { path:'public.pdf', extension:'pdf', stat:{mtime:1,size:80} };
+  const passages = ['First example.', 'Second example.', 'Third example.'];
+  const data = { entries: passages.map((title,i) => ({ title, page:1, level:1, offset:passages.slice(0,i).join('').length })),
+    pages: [{ pageNumber: 1, text: passages.join('') }] };
+  const key = plugin.documentOutlineKey(file);
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  plugin.getActiveFile = () => file; plugin.syncToolbar = () => {}; plugin.renderViews = () => {};
+  plugin.rememberPosition = async item => saved.push(item.text);
+  plugin.buildPdfChunks = pages => pages.map(page => page.text);
+  plugin.playSystemChunk = text => new Promise(resolve => requests.push({ text, resolve }));
+  const options = { onStarted: () => handoffs.push(plugin.queue.items.map(item=>item.text)) };
+  const first = plugin.readPdfSection(file,key,data,0,false,options);
+  await tick();
+  assert.deepEqual(handoffs, [[passages[0]]]);
+  plugin.pauseRequested = true;
+  const second = plugin.readPdfSection(file,key,data,1,false,options);
+  await tick();
+  assert.deepEqual(handoffs, [[passages[0]],[passages[1]]]);
+  assert.equal(plugin.pauseRequested, false);
+  assert.deepEqual(requests.map(r=>r.text),passages.slice(0,2));
+  requests[0].resolve('ended'); await first;
+  assert.deepEqual(saved, []); assert.equal(plugin.queue.items[0].text,passages[1]);
+  requests[1].resolve('ended'); await second;
+  assert.deepEqual(saved, [passages[1]]);
+});
+
 test('mobile formula choices persist in both setting languages without changing voices', async () => {
   for (const settingsLanguage of ['english', 'chinese']) {
     const plugin = fixture({ settingsLanguage, speechEngine: 'mimo', mimoVoice: '冰糖' });

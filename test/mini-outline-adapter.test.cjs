@@ -45,6 +45,18 @@ test('mobile reads current editor without a vault read and section choice retain
   await f.adapter.read(f.view,data,1,true);assert.equal(f.calls.at(-1)[1],f.text.slice(f.text.indexOf('## Child')));
   f.view.editor.getValue=()=>f.text+'edited';await assert.rejects(f.adapter.read(f.view,data,0,true));
 });
+test('outline start is rechecked after revealing the pane; it does not bypass export or dispatch stale input', async () => {
+  const f = fixture(), data = await f.adapter.load(f.view, () => false);
+  let closing = false;
+  const start = { cancelled: () => closing, onStarted: () => assert.fail('Start must not be acknowledged') };
+  f.plugin.app.workspace.revealLeaf = async () => { closing = true; };
+  await f.adapter.read(f.view, data, 0, true, start);
+  closing = false;
+  f.plugin.app.workspace.revealLeaf = async () => { f.plugin.exportModal = {busy:true}; };
+  await f.adapter.read(f.view, data, 0, false, start);
+  assert.deepEqual(f.calls, []);
+});
+
 test('HTML uses current rendered headings; duplicate titles have distinct targets and DOM changes invalidate',async t=>{
   const f=fixture(),dom=new JSDOM('<h1>Overview</h1><p>First.</p><h1>Overview</h1><p>Second.</p>');t.after(()=>dom.window.close());
   f.file.extension='html';f.view.mainView={iframe:{contentDocument:dom.window.document}};

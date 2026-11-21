@@ -1163,16 +1163,16 @@ class NoteReaderMobilePlugin extends Plugin {
       ? JSON.stringify([key, this.settings.stripMarkdown, academicOptions(this.settings)]) : key;
   }
 
-  readPdfSection(file, key, data, index, remaining) {
+  readPdfSection(file, key, data, index, remaining, startOptions = {}) {
     if (!this.isOutlineCurrent(file, key) || this.getActiveFile() !== file) throw new Error('PDF or settings changed.');
     if (data.kind) {
-      return this.startTextSession(sectionText(data, index, remaining), { file, kind: 'markdown', sourceLabel: data.entries[index].title,
+      return this.startTextSession(sectionText(data, index, remaining), { ...startOptions, file, kind: 'markdown', sourceLabel: data.entries[index].title,
         ...(data.kind === 'markdown' ? { sourceText: data.text, sourceOffset: data.entries[index].offset } : {}) });
     }
     const pages = sectionPages(data, index, remaining);
     const chunks = this.buildPdfChunks(pages, {});
     if (!chunks.length) throw new Error('No readable text in the section.');
-    return this.startPreparedChunks(chunks, { file, kind: 'pdf', sourceLabel: data.entries[index].title,
+    return this.startPreparedChunks(chunks, { ...startOptions, file, kind: 'pdf', sourceLabel: data.entries[index].title,
       highlightRanges: mapSpeechBlocks(pdfHighlightBlocks(pages, value => this.prepareText(value)), chunks) });
   }
 
@@ -1359,7 +1359,9 @@ class NoteReaderMobilePlugin extends Plugin {
     this.statusDetail = '';
     this.phaseOverride = '';
     this.renderViews();
-    return this.runFromCurrent();
+    const playback = this.runFromCurrent();
+    context.onStarted?.();
+    return playback;
   }
 
   beginOperation(status) {
