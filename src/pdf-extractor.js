@@ -56,7 +56,7 @@ async function extractPdfDocument(app, file, options = {}) {
     const samples = [];
     let textLength = 0;
 
-    async function readLayout(pageNumber) {
+    async function readLayout(pageNumber, readMarks = true) {
       let page;
       try {
         page = await document.getPage(pageNumber);
@@ -70,8 +70,16 @@ async function extractPdfDocument(app, file, options = {}) {
           const height = sizes[Math.floor(sizes.length / 2)];
           return height ? { ...line, highlightRect: [line.xMin, line.y - height * .2, line.xMax, line.y + height] } : line;
         });
-        const mathChanges = options.mathSettings ? pdfMathChanges(layout, content?.items || [],
-          options.mathSettings, pdfFontNames(page, content?.items || []), encodingContext) : [];
+        const items = content?.items || [];
+        let bars;
+        if (readMarks && options.mathSettings && options.mathSettings.academicMathMode !== 'skip'
+          && options.mathSettings.mathReadingLanguage !== 'skip' && pdfjsLib.OPS && page.getOperatorList
+          && items.some(i => /[\u{1d400}-\u{1d7ff}]/u.test(i.str))) {
+          try { bars = require('./pdf-speech/pdf-math-bars').pdfBarOffsets(items, await page.getOperatorList(), pdfjsLib.OPS); }
+          catch { /* Drawing information is optional; the text layer is sufficient for formula filtering. */ }
+        }
+        const mathChanges = options.mathSettings ? pdfMathChanges(layout, items,
+          options.mathSettings, pdfFontNames(page, items), encodingContext, bars) : [];
         if (options.includeOutline) layout = outlineLayout(layout, content?.items, content?.styles, viewport);
         layout = markFootnotes(layout, content?.items, viewport, pageNumber);
         return { layout, pageNumber, text: layout.text, totalPages, mathChanges,
@@ -84,7 +92,7 @@ async function extractPdfDocument(app, file, options = {}) {
       for (let number = Math.max(1, startPageNumber - 3); number < startPageNumber; number += 1) {
         if (options.isCancelled?.()) return { pages: [], bookmarks: [] };
         try {
-          const sample = await readLayout(number);
+          const sample = await readLayout(number, false);
           samples.push({ pageNumber: number, edgeCandidates: sample.edgeCandidates });
         } catch { /* Optional evidence must not prevent reading the requested pages. */ }
       }
